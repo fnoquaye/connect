@@ -1,6 +1,6 @@
 # connect
 
-A new Flutter project.
+Reworked Chat App for final year project
 
 ## Getting Started
 
