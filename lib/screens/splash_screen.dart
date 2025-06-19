@@ -1,5 +1,6 @@
 import 'package:connect/screens/homescreen.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../main.dart';
 
@@ -15,7 +16,11 @@ class _SplashScreen extends State<SplashScreen> {
   @override
   void initState(){
     super.initState();
-    Future.delayed(const Duration(milliseconds: 1500),(){
+    Future.delayed(const Duration(milliseconds: 2000),(){
+      //exit fullscreen
+      SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+      SystemChrome.setSystemUIOverlayStyle(SystemUiOverlayStyle(statusBarColor: Colors.transparent));
+      //navigate to hoem screen
       Navigator.pushReplacement(context, MaterialPageRoute(builder: (_)=> const HomeScreen()));
     });
   }
