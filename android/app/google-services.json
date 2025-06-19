@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "177728232626",
+    "project_id": "connect-200a",
+    "storage_bucket": "connect-200a.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:177728232626:android:9969473fd6da185c62fdab",
+        "android_client_info": {
+          "package_name": "com.example.connect"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBJyxf5k8tGYdOVAkReGyQNc79YPUW5DDA"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
