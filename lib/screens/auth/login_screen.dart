@@ -21,7 +21,7 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   void initState(){
     super.initState();
-    Future.delayed(const Duration(milliseconds: 500), (){
+    Future.delayed(const Duration(milliseconds: 10), (){
       setState(() {
         _isAnimate = true ;
       });
@@ -29,8 +29,14 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   _handleGoogleButtonClick(){
+
+    //show progress bar
     Dialogs.showProgressBar(context);
     _signInWithGoogle().then((user){
+    //hide progress bar
+      Navigator.pop(context);
+
+
       if(user != null){
         print('\nUser: ${user.user}');
         print('\nUserAdditionalInfo: ${user.additionalUserInfo}');
@@ -58,7 +64,7 @@ class _LoginScreenState extends State<LoginScreen> {
         accessToken: googleAuth?.accessToken,
         idToken: googleAuth?.idToken,
   );
-      Dialogs.showSnackbar(context, 'Problem while Signing In. Check Connection');
+      Dialogs.showSnackbar(context, 'Check Connection');
 
       // ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Sign In Successful'),
       //   backgroundColor: Colors.amber,
