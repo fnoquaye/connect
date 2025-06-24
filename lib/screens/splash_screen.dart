@@ -1,4 +1,5 @@
-import 'package:connect/screens/homescreen.dart';
+import 'package:connect/screens/auth/login_screen.dart';
+// import 'package:connect/screens/homescreen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -21,7 +22,7 @@ class _SplashScreen extends State<SplashScreen> {
       SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
       SystemChrome.setSystemUIOverlayStyle(SystemUiOverlayStyle(statusBarColor: Colors.transparent));
       //navigate to hoem screen
-      Navigator.pushReplacement(context, MaterialPageRoute(builder: (_)=> const HomeScreen()));
+      Navigator.pushReplacement(context, MaterialPageRoute(builder: (_)=> const LoginScreen()));
     });
   }
 

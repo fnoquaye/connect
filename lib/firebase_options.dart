@@ -63,6 +63,9 @@ class DefaultFirebaseOptions {
     messagingSenderId: '177728232626',
     projectId: 'connect-200a',
     storageBucket: 'connect-200a.firebasestorage.app',
+    androidClientId: '177728232626-tvnofqp7gksaeb602dtlm99rn6m618ig.apps.googleusercontent.com',
+    iosClientId: '177728232626-kb6nvvvpf0dlsp8sn5s34nl6i7ire08o.apps.googleusercontent.com',
     iosBundleId: 'com.example.connect',
   );
+
 }

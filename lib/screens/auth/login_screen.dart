@@ -1,5 +1,10 @@
+import 'dart:io';
+
+import 'package:connect/helper/dialogs.dart';
 import 'package:connect/screens/homescreen.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 
 import '../../main.dart';
 
@@ -7,13 +12,84 @@ class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
 
   @override
-  State<LoginScreen> createState() => _HomeScreenState();
+  State<LoginScreen> createState() => _LoginScreenState();
 }
 
-class _HomeScreenState extends State<LoginScreen> {
+class _LoginScreenState extends State<LoginScreen> {
+  bool _isAnimate = false;
+
+  @override
+  void initState(){
+    super.initState();
+    Future.delayed(const Duration(milliseconds: 500), (){
+      setState(() {
+        _isAnimate = true ;
+      });
+    });
+  }
+
+  _handleGoogleButtonClick(){
+    Dialogs.showProgressBar(context);
+    _signInWithGoogle().then((user){
+      if(user != null){
+        print('\nUser: ${user.user}');
+        print('\nUserAdditionalInfo: ${user.additionalUserInfo}');
+
+        Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (_) => const HomeScreen()));
+      }
+        Dialogs.showSnackbar(context, 'Sign In Successful');
+    });
+  }
+
+
+  Future<UserCredential?> _signInWithGoogle() async {
+    try{
+      await InternetAddress.lookup('google.com');
+  // Trigger the authentication flow
+      final GoogleSignInAccount? googleUser = await GoogleSignIn().signIn();
+
+  // Obtain the auth details from the request
+      final GoogleSignInAuthentication? googleAuth = await googleUser?.authentication;
+
+  // Create a new credential
+      final credential = GoogleAuthProvider.credential(
+        accessToken: googleAuth?.accessToken,
+        idToken: googleAuth?.idToken,
+  );
+      Dialogs.showSnackbar(context, 'Problem while Signing In. Check Connection');
+
+      // ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Sign In Successful'),
+      //   backgroundColor: Colors.amber,
+      // ));
+
+  // Once signed in, return the UserCredential
+  return await FirebaseAuth.instance.signInWithCredential(credential);
+  }catch(e){
+    print('\n_signInWithGoogle: $e}');
+    print('\n_signInWithGoogle: $e}');
+    // ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Something Went Wrong. Check Connection'), backgroundColor: Colors.cyan.withOpacity(0.8),));
+
+    return null;
+    }
+  }
+
+  // //sign out function
+  //   _signOut() async {
+  //   await FirebaseAuth.instance.signOut();
+  //   await GoogleSignIn().signOut();
+  //   }
+
+
+
+
+
+
   @override
   Widget build(BuildContext context) {
-    mq = MediaQuery.of(context).size;
+    // initializing media query for getting screen size
+    // mq = MediaQuery.of(context).size;
 
     return Scaffold(
       //app bar
@@ -25,10 +101,12 @@ class _HomeScreenState extends State<LoginScreen> {
       body: Stack(
         children: [
           //app logo
-          Positioned(
+          AnimatedPositioned(
             top: mq.height * 0.1,
+              right: _isAnimate ? mq.width * 0.25 : -mq.width * 0.5,
               width: mq.width * 0.5,
-              left: mq.width * 0.25,
+              duration: const Duration(seconds: 2),
+              // left: mq.width * 0.25,
               child: Image.asset('assets/chat.png')),
 
           //sign in button
@@ -41,9 +119,7 @@ class _HomeScreenState extends State<LoginScreen> {
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.cyan),
                   onPressed: (){
-                    Navigator.pushReplacement(
-                        context,
-                        MaterialPageRoute(builder: (_) => const HomeScreen()));
+                      _handleGoogleButtonClick();
                   },
                 // google Icon
                   icon: Image.asset('assets/google.png',
@@ -60,7 +136,7 @@ class _HomeScreenState extends State<LoginScreen> {
 
           //create account button
           Positioned(
-            bottom: mq.height * 0.06,
+            bottom: mq.height * 0.08,
             width: mq.width * 0.8,
             left: mq.width * 0.1,
             height: mq.height * 0.06,

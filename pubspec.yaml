@@ -31,7 +31,12 @@ dependencies:
   flutter:
     sdk: flutter
 #  firebase_core: ^3.14.0
+# firebase integration
   firebase_core: ^2.24.0
+  #firebase authentication
+  firebase_auth: ^4.17.0
+  #google sign in
+  google_sign_in: ^5.4.4
 
 
 
