@@ -23,7 +23,9 @@ class _ChatUserCardState extends State<ChatUserCard> {
           leading: CircleAvatar(child: Icon(CupertinoIcons.person)),
           title: Text('Demo User'),
           subtitle: Text('Last User Message', maxLines: 1),
-          trailing: Text('12:00 PM', style: TextStyle(color: Colors.black54)),
+          trailing: Text('12:00 PM',
+              // style: TextStyle(color: Colors.black54)),
+          ),
         ),
       ),
     );

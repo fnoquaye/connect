@@ -62,7 +62,7 @@ class _SplashScreen extends State<SplashScreen> {
         children: [
           //app logo
           Positioned(
-              top: mq.height * 0.1,
+              top: mq.height * 0.3,
               width: mq.width * 0.5,
               left: mq.width * 0.25,
               child: Image.asset('assets/chat.png')),
@@ -77,7 +77,7 @@ class _SplashScreen extends State<SplashScreen> {
               textAlign: TextAlign.center,
               style: TextStyle(
                 fontSize: 20,
-                color: Colors.black,
+                // color: Colors.white,
                 letterSpacing: 0.5,
 
               ),

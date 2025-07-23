@@ -1,3 +1,8 @@
+import 'dart:convert';
+import 'dart:developer';
+
+import 'package:connect/APIs/apis.dart';
+import 'package:connect/screens/auth/login_screen.dart';
 import 'package:connect/widgets/chat_user_card.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/cupertino.dart';
@@ -38,6 +43,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 //sign out function
                   await FirebaseAuth.instance.signOut();
                   await GoogleSignIn().signOut();
+                  Navigator.pushReplacement(context, MaterialPageRoute(builder: (context)=> LoginScreen()));
               },
           child: Icon(Icons.add_comment_rounded),
 
@@ -45,14 +51,30 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
       ),
 
-      body: ListView.builder(
-          itemCount: 15,
-          padding: EdgeInsets.only(top: mq.height * 0.01),
-          physics: BouncingScrollPhysics(),
-          // padding: EdgeInsets.all(2.0),
-          itemBuilder: (context, index){
-        return const ChatUserCard();
-      }),
+      body: StreamBuilder(stream: APIS.firestore.collection('users').snapshots(),
+          builder: (context, snapshot){
+        final list = [];
+          if(snapshot.hasData){
+            final data = snapshot.data?.docs;
+            for(var i in data!){
+              log('Data: ${jsonEncode(i.data())}');
+              list.add(i.data()['name']);
+            }
+          }
+
+
+          return  ListView.builder(
+              itemCount: 11,
+              padding: EdgeInsets.symmetric(vertical: mq.height * 0.001, horizontal: mq.width * 0.005),
+              // padding: EdgeInsets.only(top: mq.height * 0.01),
+              physics: BouncingScrollPhysics(),
+              // padding: EdgeInsets.all(2.0),
+              itemBuilder: (context, index){
+                return const ChatUserCard();
+              }
+          );
+      }
+    )
     );
   }
 }
