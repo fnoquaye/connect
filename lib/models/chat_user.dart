@@ -34,7 +34,7 @@ class ChatUser {
           : null,
       isOnline: json['is_online'] ?? false,
       email: json['email'] ?? '',
-      pushToken: json['push_token'],
+      pushToken: json['push_token'] ?? '',
     );
   }
 

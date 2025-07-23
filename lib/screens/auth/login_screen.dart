@@ -149,7 +149,7 @@ class _LoginScreenState extends State<LoginScreen> {
             child: TextButton(onPressed: (){},
                 child: const Text('Create a Google Account',
                   style: TextStyle(
-                    color: Colors.black,
+                    // color: Colors.black,
                     fontSize: 18,
                     fontWeight: FontWeight.w500,
                     decoration: TextDecoration.underline,
