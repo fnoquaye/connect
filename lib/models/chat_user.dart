@@ -4,6 +4,7 @@ class ChatUser {
   final String image;
   final String about;
   final String name;
+  final String id;
   final DateTime? createdAt;
   final DateTime? lastActive;
   final bool isOnline;
@@ -14,6 +15,7 @@ class ChatUser {
     required this.image,
     required this.about,
     required this.name,
+    required this.id,
     this.createdAt,
     this.lastActive,
     required this.isOnline,
@@ -26,6 +28,7 @@ class ChatUser {
       image: json['image'] ?? '',
       about: json['about'] ?? '',
       name: json['name'] ?? '',
+      id: json['id'] ?? '',
       createdAt: json['created_at'] != null
           ? (json['created_at'] as Timestamp).toDate()
           : null,

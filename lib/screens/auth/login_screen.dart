@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:connect/APIs/apis.dart';
 import 'package:connect/helper/dialogs.dart';
 import 'package:connect/screens/homescreen.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -32,7 +33,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
     //show progress bar
     Dialogs.showProgressBar(context);
-    _signInWithGoogle().then((user){
+    _signInWithGoogle().then((user) async {
     //hide progress bar
       Navigator.pop(context);
 
@@ -41,9 +42,17 @@ class _LoginScreenState extends State<LoginScreen> {
         print('\nUser: ${user.user}');
         print('\nUserAdditionalInfo: ${user.additionalUserInfo}');
 
-        Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(builder: (_) => const HomeScreen()));
+        if((await APIS.userExists())){
+          Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(builder: (_) => const HomeScreen()));
+        }else{
+          await APIS.createUser().then((value){
+            Navigator.pushReplacement(
+                context,
+                MaterialPageRoute(builder: (_) => const HomeScreen()));
+          });
+        }
       }
         Dialogs.showSnackbar(context, 'Sign In Successful');
     });
