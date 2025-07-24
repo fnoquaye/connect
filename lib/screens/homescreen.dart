@@ -3,6 +3,7 @@
 
 import 'package:connect/APIs/apis.dart';
 import 'package:connect/screens/auth/login_screen.dart';
+import 'package:connect/screens/profile_screen.dart';
 import 'package:connect/widgets/chat_user_card.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/cupertino.dart';
@@ -32,7 +33,9 @@ class _HomeScreenState extends State<HomeScreen> {
           //search button
           IconButton(onPressed: (){}, icon: const Icon(Icons.search)),
           //more features button
-          IconButton(onPressed: (){}, icon: const Icon(Icons.more_vert)),
+          IconButton(onPressed: (){
+    Navigator.push(context, MaterialPageRoute(builder: (_) => ProfileScreen(user: list[0])));
+          }, icon: const Icon(Icons.more_vert)),
         ],
       ),
 
