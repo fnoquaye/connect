@@ -2,13 +2,14 @@
 // import 'dart:developer';
 
 import 'package:connect/APIs/apis.dart';
-import 'package:connect/screens/auth/login_screen.dart';
+// import 'package:connect/screens/auth/login_screen.dart';
 import 'package:connect/screens/profile_screen.dart';
 import 'package:connect/widgets/chat_user_card.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+// import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/cupertino.dart';
+import 'package:faker/faker.dart';
 import 'package:flutter/material.dart';
-import 'package:google_sign_in/google_sign_in.dart';
+// import 'package:google_sign_in/google_sign_in.dart';
 
 import '../main.dart';
 import '../models/chat_user.dart';
@@ -95,11 +96,42 @@ class _HomeScreenState extends State<HomeScreen> {
         child: FloatingActionButton(
           onPressed:
               () async {
-                //sign out function
-                  await FirebaseAuth.instance.signOut();
-                  await GoogleSignIn().signOut();
-                  Navigator.pushReplacement(context, MaterialPageRoute(builder: (context)=> LoginScreen()));
-              },
+            final faker = Faker();
+            const int numberOfFakeUsers = 5;
+
+            for (int i = 0; i < numberOfFakeUsers; i++) {
+              final id = DateTime.now().millisecondsSinceEpoch.toString() + i.toString();
+              final name = faker.person.name();
+              final email = faker.internet.email();
+              final image = 'https://api.dicebear.com/7.x/personas/svg?seed=$name';
+
+              final fakeUser = {
+                'id': id,
+                'name': name,
+                'email': email,
+                'about': 'This is a fake user.',
+                'image': image,
+                'createdAt': DateTime.now().toString(),
+                'lastActive': DateTime.now().toString(),
+                'isOnline': false,
+                'pushToken': '',
+              };
+
+              await APIS.firestore.collection('users').doc(id).set(fakeUser);
+            }
+
+            if (context.mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('$numberOfFakeUsers fake users added')),
+              );
+            }
+          },
+          // () async {
+              //   //sign out function
+              //     await FirebaseAuth.instance.signOut();
+              //     await GoogleSignIn().signOut();
+              //     Navigator.pushReplacement(context, MaterialPageRoute(builder: (context)=> LoginScreen()));
+              // },
           child: Icon(Icons.add_comment_rounded),
 
 
