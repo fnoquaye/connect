@@ -22,6 +22,14 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
  List<ChatUser> list = [];
+
+ @override
+  void initState() {
+    super.initState();
+    APIS.getSelfInfo();
+  }
+
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -34,7 +42,7 @@ class _HomeScreenState extends State<HomeScreen> {
           IconButton(onPressed: (){}, icon: const Icon(Icons.search)),
           //more features button
           IconButton(onPressed: (){
-    Navigator.push(context, MaterialPageRoute(builder: (_) => ProfileScreen(user: list[0])));
+    Navigator.push(context, MaterialPageRoute(builder: (_) => ProfileScreen(user:APIS.me)));
           }, icon: const Icon(Icons.more_vert)),
         ],
       ),
@@ -57,7 +65,8 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
 
       body: StreamBuilder(
-          stream: APIS.firestore.collection('users').snapshots(),
+          // stream: APIS.firestore.collection('users').snapshots(),
+          stream: APIS.getAllUsers(),
           builder: (context, snapshot){
             switch (snapshot.connectionState){
               //if data is loading
