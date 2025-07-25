@@ -1,9 +1,9 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 class ChatUser {
-  final String image;
-  final String about;
-  final String name;
+   String image;
+   String about;
+   String name;
   final String id;
   final DateTime? createdAt;
   final DateTime? lastActive;
@@ -11,7 +11,7 @@ class ChatUser {
   final String email;
   final String? pushToken;
 
-  const ChatUser({
+   ChatUser({
     required this.image,
     required this.about,
     required this.name,

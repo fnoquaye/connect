@@ -44,8 +44,6 @@ static Future<bool> userExists() async{
 
 // to create a new user
   static Future<void> createUser() async{
-    // final time = DateTime.now();
-        // .millisecondsSinceEpoch.toString();
 
     final chatUser = ChatUser(
         id: user.uid,
@@ -70,6 +68,17 @@ static Future<bool> userExists() async{
         .collection('users')
         .where('id', isNotEqualTo: user.uid)
         .snapshots();
+  }
+
+  static Future<void> UpdateUserInfo() async{
+     await firestore
+        .collection('users')
+        .doc(user.uid)
+        .update({
+       'name': me.name,
+       'about': me.about,
+     })
+        ;
   }
 }
 
