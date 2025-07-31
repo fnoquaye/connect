@@ -35,6 +35,7 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'Connect',
+      // themeMode: ThemeMode.light,
       themeMode: themeProvider.themeMode,
       theme: ThemeData.light().copyWith(
         appBarTheme: const AppBarTheme(
@@ -51,7 +52,7 @@ class MyApp extends StatelessWidget {
             fontSize: 28,
             fontWeight: FontWeight.w400,
           ),
-          backgroundColor: Colors.blue,
+          backgroundColor: Colors.transparent,
         ),
       ),
       darkTheme: ThemeData.dark().copyWith(
