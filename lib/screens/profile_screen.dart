@@ -4,13 +4,18 @@
 // import 'package:connect/APIs/apis.dart';
 // import 'dart:developer';
 
+import 'dart:developer';
+import 'dart:io';
+
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:connect/APIs/apis.dart';
 import 'package:connect/screens/auth/login_screen.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+import 'package:image_picker/image_picker.dart';
 import '../helper/dialogs.dart';
 import '../main.dart';
 import '../models/chat_user.dart';
@@ -30,6 +35,7 @@ class ProfileScreen extends StatefulWidget {
 
 class _ProfileScreenState extends State<ProfileScreen> {
   final _formkey = GlobalKey<FormState>();
+  String? _image;
 
   @override
   Widget build(BuildContext context) {
@@ -87,12 +93,25 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       Stack(
                         children: [
                           //profile picture
+                          _image != null ?
+                              //local image
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(mq.height * 0.1),
+                            child: Image.file(
+                              File(_image!),
+                              width: mq.height * 0.2,
+                              height: mq.height * 0.2,
+                              fit: BoxFit.cover,
+                            )
+                          )
+                              :
+                              //image from server
                           ClipRRect(
                         borderRadius: BorderRadius.circular(mq.height * 0.1),
                         child: CachedNetworkImage(
                           width: mq.height * 0.2,
                           height: mq.height * 0.2,
-                          fit: BoxFit.fill,
+                          fit: BoxFit.cover,
                           imageUrl: widget.user.image,
                           placeholder: (context, url) => CircularProgressIndicator(),
                           errorWidget: (context, url, error) => CircleAvatar(child: Icon(CupertinoIcons.person)),
@@ -105,7 +124,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             right: 0,
                             child: MaterialButton(
                               elevation: 1,
-                                onPressed: (){},
+                                onPressed: (){
+                                 _showBottomSheet();
+                                },
                                 shape: const CircleBorder(),
                                 child: Icon(Icons.edit),
                                 color: Colors.blue,
@@ -187,4 +208,153 @@ class _ProfileScreenState extends State<ProfileScreen> {
       ),
     );
   }
+  //bottom sheet for picking a profile picture for user
+void _showBottomSheet(){
+  showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.only(
+            topLeft: Radius.circular(20),
+            topRight: Radius.circular(20),
+          )
+      ),
+      builder: (_){
+        return ListView(
+          shrinkWrap: true,
+          padding: EdgeInsets.only(
+              top: mq.height * 0.01,
+              bottom: mq.height * 0.05),
+          children: [
+            const Text('Pick Profile Picture',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                  fontSize: 20)),
+            SizedBox(height: 14),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: [
+                //pick from gallery
+                Column(
+                  children: [
+                    ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        shape: const CircleBorder(),
+                        // elevation: 4,
+                      ),
+                        onPressed: () async {
+                        final ImagePicker picker = ImagePicker();
+                        //pick an image
+                          final XFile? image = await picker.pickImage(source: ImageSource.gallery);
+                          if(image != null){
+                            log('Image Path: ${image.path} -- MimeType: ${image.mimeType}');
+                            setState(() {
+                              _image = image.path;
+                            });
+                            Navigator.pop(context);
+
+                          }
+                        },
+                        child: SvgPicture.asset('assets/photos.svg',
+                          width: mq.width * 0.2,
+                          height: mq.width * 0.2,
+                        )
+                        ),
+                    const SizedBox(height: 8),
+                    const Text('Photos'),
+                  ],
+                ),
+
+                //take new photo
+                Column(
+                  children: [
+                    ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          shape: const CircleBorder(),
+
+                          // elevation: 4,
+                        ),
+                        onPressed: () async {
+                            final ImagePicker picker = ImagePicker();
+                            //pick an image
+                            final XFile? image = await picker.pickImage(source: ImageSource.camera);
+                            if(image != null){
+                            log('Image Path: ${image.path}');
+                            setState(() {
+                            _image = image.path;
+                            });
+                            Navigator.pop(context);}
+                            },
+                        child: SvgPicture.asset('assets/camera.svg',
+                          fit: BoxFit.cover,
+                          width: mq.width * 0.2,
+                          height: mq.width * 0.2,
+                        )
+                    ),
+                    const SizedBox(height: 8),
+                    const Text('camera'),
+                  ],
+                )
+              ],
+            )
+          ],
+        );
+      });
 }
+}
+
+
+
+
+
+
+// void _showBottomSheet() {
+//   showModalBottomSheet(
+//     context: context,
+//     shape: const RoundedRectangleBorder(
+//       borderRadius: BorderRadius.only(
+//         topLeft: Radius.circular(20),
+//         topRight: Radius.circular(20),
+//       ),
+//     ),
+//     builder: (_) {
+//       return ListView(
+//         shrinkWrap: true,
+//         padding: const EdgeInsets.symmetric(vertical: 20),
+//         children: [
+//           const Text(
+//             'Pick Profile Picture',
+//             textAlign: TextAlign.center,
+//             style: TextStyle(fontSize: 20, fontWeight: FontWeight.w500),
+//           ),
+//           const SizedBox(height: 20),
+//           ListTile(
+//             leading: const Icon(Icons.camera_alt, color: Colors.blue),
+//             title: const Text('Camera'),
+//             onTap: () async {
+//               final pickedFile = await ImagePicker().pickImage(source: ImageSource.camera);
+//               if (pickedFile != null) {
+//                 // You can now upload or use the file
+//                 print('Picked from camera: ${pickedFile.path}');
+//               }
+//               Navigator.pop(context); // Close the bottom sheet
+//             },
+//           ),
+//           ListTile(
+//             leading: const Icon(Icons.photo, color: Colors.green),
+//             title: const Text('Gallery'),
+//             onTap: () async {
+//               final pickedFile = await ImagePicker().pickImage(source: ImageSource.gallery);
+//               if (pickedFile != null) {
+//                 // You can now upload or use the file
+//                 print('Picked from gallery: ${pickedFile.path}');
+//               }
+//               Navigator.pop(context); // Close the bottom sheet
+//             },
+//           ),
+//         ],
+//       );
+//     },
+//   );
+// }
+
+

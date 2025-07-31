@@ -42,6 +42,8 @@ dependencies:
   provider: ^6.0.5
   cached_network_image: ^3.3.1
   faker: ^2.1.0
+  image_picker: ^1.0.4
+  flutter_svg: ^2.0.7
 
 
 
@@ -86,6 +88,10 @@ flutter:
   assets:
      - assets/chat.png
      - assets/google.png
+     - assets/photos_icon.png
+     - assets/camera_icon.png
+     - assets/camera.svg
+     - assets/photos.svg
   #   - images/a_dot_ham.jpeg
 
   # An image asset can refer to one or more resolution-specific "variants", see
