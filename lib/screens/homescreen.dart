@@ -180,7 +180,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           );
                         }else{
                           return const Center(
-                            child: Text('No Connections Found\n''Start A new Conversation',
+                            child: Text('No Connections Found\n''Build A new Connection',
                               style: TextStyle(
                                 fontSize: 20,
           

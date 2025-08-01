@@ -8,6 +8,7 @@ import '../main.dart';
 class ChatScreen extends StatefulWidget {
   final ChatUser user;
 
+
   const ChatScreen({super.key, required this.user});
 
   @override
@@ -15,6 +16,8 @@ class ChatScreen extends StatefulWidget {
 }
 
 class _ChatScreenState extends State<ChatScreen> {
+  final TextEditingController _textController = TextEditingController();
+
   @override
   Widget build(BuildContext context) {
     return SafeArea(
@@ -25,7 +28,69 @@ class _ChatScreenState extends State<ChatScreen> {
           flexibleSpace: _appBar(),
         ),
         //body
-        body: Column(),
+        body: Column(
+          children: [
+            Expanded(
+              child: StreamBuilder(
+                // stream: APIS.firestore.collection('users').snapshots(),
+                //   stream: APIS.getAllUsers(),
+                  stream: Stream.empty(),
+                  builder: (context, snapshot){
+                    switch (snapshot.connectionState){
+                    //if data is loading
+                      case  ConnectionState.waiting:
+                      case ConnectionState.none:
+                        return const Center(
+                          child: CircularProgressIndicator(),
+                        );
+
+                    //if some or all data is loaded then show it
+                      case ConnectionState.active:
+                      case ConnectionState.done:
+                      // if(snapshot.hasData){
+                      //   final data = snapshot.data?.docs;
+                      //   _list = data?.map((e) => ChatUser.fromJson(e.data())).toList() ?? [];
+
+                      final _list = [];
+                        if(_list.isNotEmpty){
+                          return  ListView.builder(
+                              itemCount: _list.length,
+                              padding: EdgeInsets.symmetric(vertical: mq.height * 0.001, horizontal: mq.width * 0.005),
+                              // padding: EdgeInsets.only(top: mq.height * 0.01),
+                              physics: BouncingScrollPhysics(),
+                              // padding: EdgeInsets.all(2.0),
+                              itemBuilder: (context, index){
+                                return Text('Message: ${_list[index]}');
+                              }
+                          );
+                        }else{
+                          return const Center(
+                            child: Text('No Conversations Found\n''Start A new Conversation',
+                              style: TextStyle(
+                                fontSize: 20,
+
+                              ),
+                            ),
+                          );
+                        }
+                    // for(var i in data!){
+                    //   log('Data: ${jsonEncode(i.data())}');
+                    //   list.add(i.data()['name']);
+                    // }
+                    }
+
+
+
+                  }
+
+
+              ),
+            ),
+
+
+            _chatInput(),
+          ],
+        ),
       ),
     );
   }
@@ -76,6 +141,77 @@ class _ChatScreenState extends State<ChatScreen> {
             ],
           )
         ],
+      ),
+    );
+  }
+
+
+  Widget _chatInput() {
+    return Card(color: Colors.transparent,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 5.0, vertical: 5.0),
+        child: Row(
+          children: [
+            Expanded(
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.surfaceContainerHighest.withOpacity(0.3),
+                  borderRadius: BorderRadius.circular(25),
+                ),
+                child: Row(
+                  children: [
+                    // Emoji icon
+                    IconButton(
+                      icon: const Icon(Icons.emoji_emotions_outlined),
+                      color: Theme.of(context).colorScheme.primary,
+                      onPressed: () {},
+                    ),
+                    // Text input field
+                    Expanded(
+                      child: TextField(
+                        keyboardType: TextInputType.multiline,
+                        maxLines: null,
+                        controller: _textController,
+                        decoration: const InputDecoration(
+                          hintText: 'Type a message...',
+                          border: InputBorder.none,
+                        ),
+                        onChanged: (value) {
+                          setState(() {}); // to toggle send button
+                        },
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.attach_file),
+                      onPressed: () {
+                        // TODO: Handle file/media picker
+                      },
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
+            const SizedBox(width: 6),
+
+            // Send button
+            CircleAvatar(
+              backgroundColor: Theme.of(context).colorScheme.primary,
+              child: IconButton(
+                icon: const Icon(Icons.send, color: Colors.white),
+                onPressed: _textController.text.trim().isEmpty
+                    ? null
+                    : () {
+                  // TODO: Send message
+                  print('Sending: ${_textController.text}');
+                  _textController.clear();
+                  setState(() {}); // to disable send button again
+                },
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
