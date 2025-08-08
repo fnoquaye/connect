@@ -84,11 +84,6 @@ _initializeFirebase() async{
   );
 }
 
-
-
-
-
-
 // return MaterialApp(
 //   title: 'Connect',
 //   themeMode: themeProvider.themeMode,

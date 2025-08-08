@@ -46,6 +46,7 @@ class ChatUser {
       'image': image,
       'about': about,
       'name': name,
+      'id' : id,
       'created_at': createdAt,
       'last_active': lastActive,
       'is_online': isOnline,

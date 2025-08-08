@@ -40,10 +40,19 @@ dependencies:
   #google sign in
   google_sign_in: ^5.4.4
   provider: ^6.0.5
+  #for showing already downloaded profile pictures
   cached_network_image: ^3.3.1
+  # to create dummy accounts
   faker: ^2.1.0
+  # well, image picker
   image_picker: ^1.0.4
+  # to use svg icons
   flutter_svg: ^2.0.7
+  # date time
+  intl: ^0.19.0
+  # emojis
+  emoji_picker_flutter: ^2.2.0
+
 
 
 
