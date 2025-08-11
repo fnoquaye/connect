@@ -18,6 +18,17 @@ class MessageCard extends StatefulWidget {
 }
 
 class _MessageCardState extends State<MessageCard> {
+
+  // @override
+  // void initState() {
+  //   super.initState();
+  //   // Automatically mark message as read if it's from the other user and not yet read
+  //   if (widget.message.read.isEmpty && widget.message.fromID != APIS.user.uid) {
+  //     APIS.updateMessageReadStatus(widget.message);
+  //   }
+  // }
+
+
   @override
   Widget build(BuildContext context) {
     return APIS.user.uid == widget.message.fromID
@@ -49,11 +60,11 @@ class _MessageCardState extends State<MessageCard> {
   //sender or another user message
 Widget _greyMessage() {
 
-    //update last read message if sender and receiver are different
-  if(widget.message.read.isEmpty){
-    APIS.updateMessageReadStatus(widget.message);
-    log('message read updated');
-  }
+  //   //update last read message if sender and receiver are different
+  // if(widget.message.fromID != APIS.user.uid && widget.message.read.isEmpty){
+  //   APIS.updateMessageReadStatus(widget.message);
+  //   log('message read updated');
+  // }
 
 
 

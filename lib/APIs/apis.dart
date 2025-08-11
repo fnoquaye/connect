@@ -83,6 +83,8 @@ static Future<bool> userExists() async{
         ;
   }
 
+
+
   ///************* CHAT SCREEN RELATED APIs **************
   // chats (collections) --> conversation_id(doc) --> messages (collection) --> message (doc)
 
@@ -96,7 +98,7 @@ static Future<bool> userExists() async{
       ChatUser user){
   return firestore
       .collection('chats/${getConversationID(user.id)}/messages/')
-      // .where('id', isNotEqualTo: user.uid)
+      .orderBy('sent', descending: false)
       .snapshots();
   }
 
@@ -121,10 +123,12 @@ static Future<bool> userExists() async{
 
   // update read status of message
   static Future<void> updateMessageReadStatus(Message message) async {
-    firestore
+    log('Updating read status for message sent at: ${message.sent}');
+   await firestore
         .collection('chats/${getConversationID(message.fromID)}/messages/')
         .doc(message.sent)
-        .update({'read':DateTime.now().millisecondsSinceEpoch.toString()});
+        .update({'read':DateTime.now().millisecondsSinceEpoch.toString()
+        });
   }
   // get only last message of a specific chat
   static Stream <QuerySnapshot<Map<String, dynamic>>> getLastMessage(

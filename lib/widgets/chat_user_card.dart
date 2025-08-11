@@ -40,7 +40,11 @@ class _ChatUserCardState extends State<ChatUserCard> {
               final data = snapshot.data?.docs;
               final list =
                   data?.map((e) => Message.fromJson(e.data())).toList() ?? [];
-              if (list.isNotEmpty) _message = list[0];
+              if (list.isNotEmpty){
+                _message = list[0];
+              } else {
+                _message = null;
+              }
 
 
               // if(data != null && data.first.exists){

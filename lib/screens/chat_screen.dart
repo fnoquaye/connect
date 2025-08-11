@@ -1,6 +1,8 @@
 // import 'dart:convert';
 // import 'dart:developer';
 
+import 'dart:developer';
+
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:connect/APIs/apis.dart';
 import 'package:connect/models/chat_user.dart';
@@ -22,6 +24,7 @@ class ChatScreen extends StatefulWidget {
 }
 
 class _ChatScreenState extends State<ChatScreen> {
+
   //for storing all messages
   List<Message> _list = [];
   // for handling message text changes
@@ -56,10 +59,19 @@ class _ChatScreenState extends State<ChatScreen> {
                       case ConnectionState.done:
                       // if(snapshot.hasData){
                         final data = snapshot.data?.docs;
+
                         _list = data
                             ?.map((e) => Message.fromJson(e.data()))
                             .toList() ??
                             [];
+
+                        // Check and mark unread messages as read
+                        for (var message in _list) {
+                          if (message.read.isEmpty && message.fromID != APIS.user.uid) {
+                            log('Marking message as read: ${message.msg}');
+                            APIS.updateMessageReadStatus(message);
+                          }
+                        }
                         // log('Data: ${jsonEncode(data![0].data())}');
 
 
