@@ -34,7 +34,7 @@ dependencies:
 # firebase integration
   firebase_core: ^2.24.0
   #firebase authentication
-  firebase_auth: ^4.17.0
+  firebase_auth: ^4.16.0
   #cloud firestore
   cloud_firestore: ^4.13.0
   #google sign in
@@ -51,7 +51,9 @@ dependencies:
   # date time
   intl: ^0.19.0
   # emojis
-  emoji_picker_flutter: ^2.2.0
+  emoji_picker_flutter: ^4.3.0
+#  awesome_emoji_picker: ^1.0.5
+
 
 
 

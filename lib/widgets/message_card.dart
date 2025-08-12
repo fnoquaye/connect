@@ -35,39 +35,10 @@ class _MessageCardState extends State<MessageCard> {
         ? _blueMessage()
         : _greyMessage();
   }
-  //  Added function to format Firestore Timestamp
-  // String _formatTime(String sentString) {
-  //   try {
-  //     final date = DateTime.parse(sentString); // <-- Fix: parse string to DateTime
-  //     return DateFormat('h:mm a').format(date); // <-- Format: 9:24 AM
-  //   } catch (e) {
-  //     return ''; // fallback in case of parse error
-  //   }
-  // }
-  // String getFormattedTime(Timestamp timestamp) {
-  //   final date = timestamp.toDate();
-  //   return DateFormat('h:mm a').format(date); // e.g., 3:45 PM
-  // }
-  // @override
-  // Widget build(BuildContext context) {
-  //   return APIS.user.uid == widget.message.fromID
-  //   ? _blueMessage()
-  //   : _greyMessage();
-  // }
-
 
 
   //sender or another user message
 Widget _greyMessage() {
-
-  //   //update last read message if sender and receiver are different
-  // if(widget.message.fromID != APIS.user.uid && widget.message.read.isEmpty){
-  //   APIS.updateMessageReadStatus(widget.message);
-  //   log('message read updated');
-  // }
-
-
-
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
@@ -78,14 +49,17 @@ Widget _greyMessage() {
             margin: EdgeInsets.symmetric(
               horizontal: mq.width * 0.04, vertical: mq.height * 0.01),
               decoration: BoxDecoration(
-                color: Colors.white12,
-                    border: Border.all(color: Colors.white12),
-                    //making borders curved and well designed
-                borderRadius: BorderRadius.only(
-                  topLeft: Radius.circular(25),
-                  topRight: Radius.circular(25),
-                  bottomRight: Radius.circular(25),
-                )
+                  color: Theme.of(context).brightness == Brightness.dark
+                      ? Color(0xFF2C2C2E)  // iMessage dark mode incoming
+                      : Color(0xFFE5E5EA), // iMessage light mode incoming (the signature grey)
+                  border: Border.all(color: Theme.of(context).brightness == Brightness.dark
+                      ? Color(0xFF2C2C2E)
+                      : Color(0xFFE5E5EA)),
+                  borderRadius: BorderRadius.only(
+                    topLeft: Radius.circular(18),    // iMessage uses 18px radius
+                    topRight: Radius.circular(18),
+                    bottomRight: Radius.circular(18),
+                  )
               ),
 
               // actual text
@@ -146,13 +120,17 @@ Widget _blueMessage(){
                   margin: EdgeInsets.symmetric(
                       horizontal: mq.width * 0.04, vertical: mq.height * 0.01),
                   decoration: BoxDecoration(
-                      color: Colors.blue,
-                      border: Border.all(color: Colors.blue),
-                      //making borders curved and well designed
+                      color: Theme.of(context).brightness == Brightness.dark
+                          ? Color(0xFF0A84FF)  // iMessage dark mode blue
+                          : Color(0xFF007AFF), // iMessage light mode blue
+                      border: Border.all(color: Theme.of(context).brightness == Brightness.dark
+                          ? Color(0xFF0A84FF)
+                          : Color(0xFF007AFF)),
                       borderRadius: BorderRadius.only(
-                        topLeft: Radius.circular(25),
-                        topRight: Radius.circular(25),
-                        bottomLeft: Radius.circular(25),
+                        topLeft: Radius.circular(18),
+                        topRight: Radius.circular(18),
+                        bottomLeft: Radius.circular(18),
+                        bottomRight: Radius.circular(1),
                       )
                   ),
 

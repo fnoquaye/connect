@@ -118,17 +118,22 @@ static Future<bool> userExists() async{
     
     final ref = firestore
         .collection('chats/${getConversationID(chatUser.id)}/messages/');
-    await ref.doc().set(message.toJson());
+    await ref.doc(time).set(message.toJson());
   }
 
   // update read status of message
   static Future<void> updateMessageReadStatus(Message message) async {
     log('Updating read status for message sent at: ${message.sent}');
+    try{
    await firestore
         .collection('chats/${getConversationID(message.fromID)}/messages/')
-        .doc(message.sent)
+        .doc(message.sent) //doc ID = timeStamp
         .update({'read':DateTime.now().millisecondsSinceEpoch.toString()
         });
+   log('Successfully marked message as read');
+    } catch (e) {
+      log('Error updating message read status: $e');
+    }
   }
   // get only last message of a specific chat
   static Stream <QuerySnapshot<Map<String, dynamic>>> getLastMessage(
@@ -137,6 +142,33 @@ static Future<bool> userExists() async{
         .collection('chats/${getConversationID(user.id)}/messages/')
         .orderBy('sent', descending: true)
         .limit(1)
+        .snapshots();
+  }
+
+  // Get only unread messages
+  static Stream<QuerySnapshot<Map<String, dynamic>>> getUnreadMessages(ChatUser user) {
+    return firestore
+        .collection('chats/${getConversationID(user.id)}/messages/')
+        .where('toID', isEqualTo: APIS.user.uid)  // Messages TO current user
+        .where('read', isEqualTo: '')             // Only unread
+        .snapshots();
+  }
+
+  // **NEW METHOD: Get all messages for unread count**
+  static Stream<QuerySnapshot<Map<String, dynamic>>> getAllMessagesForUnreadCount(ChatUser user) {
+    return firestore
+        .collection('chats/${getConversationID(user.id)}/messages/')
+        .where('toID', isEqualTo: APIS.user.uid)  // Messages sent TO current user
+        .where('read', isEqualTo: '')             // Only unread messages
+        .snapshots();
+  }
+
+  // **ALTERNATIVE: Get recent messages (last 50) for better performance**
+  static Stream<QuerySnapshot<Map<String, dynamic>>> getRecentMessages(ChatUser user) {
+    return firestore
+        .collection('chats/${getConversationID(user.id)}/messages/')
+        .orderBy('sent', descending: true)
+        .limit(50)  // Get last 50 messages
         .snapshots();
   }
 }

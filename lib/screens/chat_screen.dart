@@ -1,8 +1,10 @@
 // import 'dart:convert';
 // import 'dart:developer';
+// import 'package:awesome_emoji_picker/awesome_emoji_picker.dart';
+
 
 import 'dart:developer';
-
+import 'package:emoji_picker_flutter/emoji_picker_flutter.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:connect/APIs/apis.dart';
 import 'package:connect/models/chat_user.dart';
@@ -24,6 +26,8 @@ class ChatScreen extends StatefulWidget {
 }
 
 class _ChatScreenState extends State<ChatScreen> {
+  bool _isEmojiPickerVisible = false;
+
 
   //for storing all messages
   List<Message> _list = [];
@@ -32,83 +36,128 @@ class _ChatScreenState extends State<ChatScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return SafeArea(
-      child: Scaffold(
-        //app bar
-        appBar: AppBar(
-          automaticallyImplyLeading: false,
-          flexibleSpace: _appBar(),
-        ),
-        //body
-        body: Column(
-          children: [
-            Expanded(
-              child: StreamBuilder(
-                // stream: APIS.firestore.collection('users').snapshots(),
-                  stream: APIS.getAllMessages(widget.user),
-                //   stream: Stream.empty(),
-                  builder: (context, snapshot){
-                    switch (snapshot.connectionState){
-                    //if data is loading
-                      case  ConnectionState.waiting:
-                      case ConnectionState.none:
-                        return const SizedBox();
+    return PopScope(
+      canPop: false, // Prevent default back behavior
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return; // Already handled
+        // **SMART BACK BUTTON LOGIC: Handle emoji picker/keyboard before exiting**
+        if (_isEmojiPickerVisible) {
+          // Close emoji picker first
+          setState(() {
+            _isEmojiPickerVisible = false;
+          });
+        } else if (FocusScope.of(context).hasFocus) {
+          // Close keyboard if it's open
+          FocusScope.of(context).unfocus();
+        } else {
+          // Nothing is open, safe to go back
+          Navigator.pop(context);
+        }
+      },
 
-                    //if some or all data is loaded then show it
-                      case ConnectionState.active:
-                      case ConnectionState.done:
-                      // if(snapshot.hasData){
-                        final data = snapshot.data?.docs;
+      child: SafeArea(
+        child: Scaffold(
+          //app bar
+          appBar: AppBar(
+            automaticallyImplyLeading: false,
+            flexibleSpace: _appBar(),
+          ),
+          //body
+          body: Column(
+            children: [
+              Expanded(
+                child: StreamBuilder(
+                  // stream: APIS.firestore.collection('users').snapshots(),
+                    stream: APIS.getAllMessages(widget.user),
+                  //   stream: Stream.empty(),
+                    builder: (context, snapshot){
+                      switch (snapshot.connectionState){
+                      //if data is loading
+                        case  ConnectionState.waiting:
+                        case ConnectionState.none:
+                          return const SizedBox();
 
-                        _list = data
-                            ?.map((e) => Message.fromJson(e.data()))
-                            .toList() ??
-                            [];
+                      //if some or all data is loaded then show it
+                        case ConnectionState.active:
+                        case ConnectionState.done:
+                        // if(snapshot.hasData){
+                          final data = snapshot.data?.docs;
 
-                        // Check and mark unread messages as read
-                        for (var message in _list) {
-                          if (message.read.isEmpty && message.fromID != APIS.user.uid) {
-                            log('Marking message as read: ${message.msg}');
-                            APIS.updateMessageReadStatus(message);
+                          _list = data
+                              ?.map((e) => Message.fromJson(e.data()))
+                              .toList() ??
+                              [];
+
+                          // Check and mark unread messages as read
+                          for (var message in _list) {
+                            if (message.read.isEmpty && message.fromID != APIS.user.uid) {
+                              log('Marking message as read: ${message.msg}');
+                              APIS.updateMessageReadStatus(message);
+                            }
                           }
-                        }
-                        // log('Data: ${jsonEncode(data![0].data())}');
+                          // log('Data: ${jsonEncode(data![0].data())}');
 
 
 
-                        // _list.clear();
-                        // _list.add(Message(toID: 'xyz', msg: 'hello', read: '', type: '', fromID: APIS.user.uid, sent: '12:00 AM'));
-                        // _list.add(Message(toID: APIS.user.uid, msg: 'hello', read: '', type: '', fromID: 'xyz', sent: '12:00 AM'));
+                          // _list.clear();
+                          // _list.add(Message(toID: 'xyz', msg: 'hello', read: '', type: '', fromID: APIS.user.uid, sent: '12:00 AM'));
+                          // _list.add(Message(toID: APIS.user.uid, msg: 'hello', read: '', type: '', fromID: 'xyz', sent: '12:00 AM'));
 
-                        if(_list.isNotEmpty){
-                          return  ListView.builder(
-                              itemCount: _list.length,
-                              padding: EdgeInsets.symmetric(vertical: mq.height * 0.001, horizontal: mq.width * 0.005),
-                              // padding: EdgeInsets.only(top: mq.height * 0.01),
-                              physics: BouncingScrollPhysics(),
-                              // padding: EdgeInsets.all(2.0),
-                              itemBuilder: (context, index){
-                                return MessageCard(message: _list[index]);
-                              }
-                          );
-                        }else{
-                          return const Center(
-                            child: Text('No Conversations Found\n''Start A new Conversation',
-                              style: TextStyle(
-                                fontSize: 20,
+                          if(_list.isNotEmpty){
+                            return  ListView.builder(
+                                itemCount: _list.length,
+                                padding: EdgeInsets.symmetric(vertical: mq.height * 0.001, horizontal: mq.width * 0.005),
+                                // padding: EdgeInsets.only(top: mq.height * 0.01),
+                                physics: BouncingScrollPhysics(),
+                                reverse: true,
+                                // padding: EdgeInsets.all(2.0),
+                                itemBuilder: (context, index){
+                                  final reversedIndex = _list.length - 1 - index;
+                                  return MessageCard(message: _list[reversedIndex]);
+                                }
+                            );
+                          }else{
+                            return const Center(
+                              child: Text('No Conversations Found\n''Start A new Conversation',
+                                style: TextStyle(
+                                  fontSize: 20,
 
+                                ),
                               ),
-                            ),
-                          );
-                        }
+                            );
+                          }
+                      }
                     }
-                  }
+                ),
               ),
-            ),
 
 
-            _chatInput(),
-          ],
+              _chatInput(),
+
+              // Fixed emoji picker for v4.3.0 syntax
+              if (_isEmojiPickerVisible)
+                SizedBox(
+                  height: 250,
+                  child: EmojiPicker(
+                    onEmojiSelected: (Category? category, Emoji emoji) {
+                      _textController.text += emoji.emoji;
+                      _textController.selection = TextSelection.fromPosition(
+                        TextPosition(offset: _textController.text.length),
+                      );
+                    },
+                    // V4+ uses simple constructor parameters instead of Config object
+                    onBackspacePressed: () {
+                      _textController
+                        ..text = _textController.text.characters.skipLast(1).toString()
+                        ..selection = TextSelection.fromPosition(
+                            TextPosition(offset: _textController.text.length));
+                    },
+                  ),
+                ),
+
+
+            ],
+          ),
         ),
       ),
     );
@@ -174,17 +223,36 @@ class _ChatScreenState extends State<ChatScreen> {
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 8),
               decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.surfaceContainerHighest.withOpacity(0.3),
+                color: Theme.of(context)
+                    .colorScheme.
+                surfaceContainerHighest.
+                withValues(alpha: 0.3),
                 borderRadius: BorderRadius.circular(25),
               ),
               child: Row(
                 children: [
+
+
                   // Emoji icon
                   IconButton(
-                    icon: const Icon(Icons.emoji_emotions_outlined),
+                    icon: Icon(
+                      _isEmojiPickerVisible
+                          ? Icons.keyboard
+                          : Icons.emoji_emotions_outlined,
+                        // Icons.emoji_emotions_outlined),
+              ),
                     color: Theme.of(context).colorScheme.primary,
-                    onPressed: () {},
+                    onPressed: (){
+                      // Show the emoji picker
+                      setState(() {
+                        _isEmojiPickerVisible = !_isEmojiPickerVisible;
+                        if (_isEmojiPickerVisible) FocusScope.of(context).unfocus();
+                      });
+                    },
                   ),
+
+
+
                   // Text input field
                   Expanded(
                     child: TextField(
@@ -195,11 +263,22 @@ class _ChatScreenState extends State<ChatScreen> {
                         hintText: 'Type a message...',
                         border: InputBorder.none,
                       ),
+                      onTap: () {
+                        // Hide emoji picker when text field is focused
+                        if (_isEmojiPickerVisible) {
+                          setState(() {
+                            _isEmojiPickerVisible = false;
+                          });
+                        }
+                      },
                       onChanged: (value) {
                         setState(() {}); // to toggle send button
                       },
                     ),
                   ),
+
+
+
                   IconButton(
                     icon: const Icon(Icons.attach_file),
                     onPressed: () {
@@ -212,6 +291,8 @@ class _ChatScreenState extends State<ChatScreen> {
           ),
 
           const SizedBox(width: 6),
+
+
 
           // Send button
           CircleAvatar(
@@ -227,6 +308,12 @@ class _ChatScreenState extends State<ChatScreen> {
               // }
                 print('Sending: ${message}');
                 _textController.clear();
+                // Hide emoji picker after sending
+                if (_isEmojiPickerVisible) {
+                  setState(() {
+                    _isEmojiPickerVisible = false;
+                  });
+                }
                 setState(() {}); // to disable send button again
               },
             ),
@@ -238,3 +325,18 @@ class _ChatScreenState extends State<ChatScreen> {
 }
 
 
+// final emoji = await AwesomeEmojiPicker.pickEmoji(
+//   context: context,
+//   config: const EmojiPickerConfig(
+//     columns: 8,
+//     emojiSizeMax: 32,
+//     enableSkinTones: true,
+//     recentsLimit: 28,
+//   ),
+// );
+// if (emoji != null) {
+//   _textController.text += emoji.emoji; // Append to existing text
+//   _textController.selection = TextSelection.fromPosition(
+//     TextPosition(offset: _textController.text.length),
+//   );
+// }
