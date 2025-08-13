@@ -5,28 +5,72 @@ import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+import 'APIs/apis.dart';
 import 'firebase_options.dart';
 
 //global object for accessing device screen size
 late Size mq;
 
-void main() {
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   //enter fullscreen
   // SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
 // portrait only
-  SystemChrome.setPreferredOrientations([
-    DeviceOrientation.portraitUp, DeviceOrientation.portraitDown])
-      .then((value){
-        _initializeFirebase();
-        runApp(ChangeNotifierProvider(create:(_)=> ThemeProvider(),
-        child: const MyApp()));
-      });
+  await SystemChrome.setPreferredOrientations([
+    DeviceOrientation.portraitUp, DeviceOrientation.portraitDown]);
+       await _initializeFirebase();
+        runApp(
+            ChangeNotifierProvider(
+                create:(_)=> ThemeProvider(),
+        child: const MyApp(),
+            ));
 }
 
-class MyApp extends StatelessWidget {
+class MyApp extends StatefulWidget {
   const MyApp({super.key});
+
+  @override
+  State<MyApp> createState() => _MyAppState();
+}
+
+class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
+  @override
+  void initState() {
+    super.initState();
+    // Add this widget as a lifecycle observer
+    WidgetsBinding.instance.addObserver(this);
+  }
+  @override
+  void dispose() {
+    // Remove the observer and clean up presence tracking
+    WidgetsBinding.instance.removeObserver(this);
+    APIS.dispose(); // Clean up presence tracking when app is disposed
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+
+    // Handle app lifecycle changes for presence tracking
+    switch (state) {
+      case AppLifecycleState.resumed:
+      // App came to foreground
+        APIS.handleAppLifecycleChange(true);
+        break;
+      case AppLifecycleState.paused:
+      case AppLifecycleState.inactive:
+      case AppLifecycleState.detached:
+      // App went to background/inactive
+        APIS.handleAppLifecycleChange(false);
+        break;
+      case AppLifecycleState.hidden:
+      // App is hidden (newer Flutter versions)
+        APIS.handleAppLifecycleChange(false);
+        break;
+    }
+  }
 
   @override
   Widget build(BuildContext context) {

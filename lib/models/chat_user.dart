@@ -6,8 +6,8 @@ class ChatUser {
    String name;
   final String id;
   final DateTime? createdAt;
-  final DateTime? lastActive;
-  final bool isOnline;
+  late final DateTime? lastActive;
+  late final bool isOnline;
   final String email;
   final String? pushToken;
 

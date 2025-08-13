@@ -1,9 +1,5 @@
-// import 'dart:convert';
-// import 'dart:developer';
-// import 'package:awesome_emoji_picker/awesome_emoji_picker.dart';
-
-
 import 'dart:developer';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:emoji_picker_flutter/emoji_picker_flutter.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:connect/APIs/apis.dart';
@@ -18,7 +14,6 @@ import '../main.dart';
 class ChatScreen extends StatefulWidget {
   final ChatUser user;
 
-
   const ChatScreen({super.key, required this.user});
 
   @override
@@ -27,7 +22,6 @@ class ChatScreen extends StatefulWidget {
 
 class _ChatScreenState extends State<ChatScreen> {
   bool _isEmojiPickerVisible = false;
-
 
   //for storing all messages
   List<Message> _list = [];
@@ -69,7 +63,7 @@ class _ChatScreenState extends State<ChatScreen> {
                 child: StreamBuilder(
                   // stream: APIS.firestore.collection('users').snapshots(),
                     stream: APIS.getAllMessages(widget.user),
-                  //   stream: Stream.empty(),
+                    //   stream: Stream.empty(),
                     builder: (context, snapshot){
                       switch (snapshot.connectionState){
                       //if data is loading
@@ -95,13 +89,6 @@ class _ChatScreenState extends State<ChatScreen> {
                               APIS.updateMessageReadStatus(message);
                             }
                           }
-                          // log('Data: ${jsonEncode(data![0].data())}');
-
-
-
-                          // _list.clear();
-                          // _list.add(Message(toID: 'xyz', msg: 'hello', read: '', type: '', fromID: APIS.user.uid, sent: '12:00 AM'));
-                          // _list.add(Message(toID: APIS.user.uid, msg: 'hello', read: '', type: '', fromID: 'xyz', sent: '12:00 AM'));
 
                           if(_list.isNotEmpty){
                             return  ListView.builder(
@@ -131,7 +118,6 @@ class _ChatScreenState extends State<ChatScreen> {
                 ),
               ),
 
-
               _chatInput(),
 
               // Fixed emoji picker for v4.3.0 syntax
@@ -155,13 +141,13 @@ class _ChatScreenState extends State<ChatScreen> {
                   ),
                 ),
 
-
             ],
           ),
         ),
       ),
     );
   }
+
   Widget _appBar(){
     return InkWell(
       onTap: (){},
@@ -170,7 +156,7 @@ class _ChatScreenState extends State<ChatScreen> {
           //back button
           IconButton(onPressed: (){Navigator.pop(context);},
               icon: const Icon(
-                  Icons.arrow_back,)),
+                Icons.arrow_back,)),
 
           //user profile picture
           ClipRRect(
@@ -185,34 +171,40 @@ class _ChatScreenState extends State<ChatScreen> {
           ),
 
           const SizedBox(width: 10),
-          // Name and status
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Text(
-                widget.user.name,
-                style: const TextStyle(
-                  fontSize: 16,
-                  // color: Colors.black87,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                widget.user.isOnline ? 'Online' : 'Offline',
-                style: TextStyle(
-                  fontSize: 13,
-                  color: widget.user.isOnline ? Colors.green : Colors.red,
-                ),
-              ),
-            ],
+          // ✅ Name and status with cleaner StreamBuilder
+          StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+            stream: APIS.getUserStatus(widget.user.id),
+            builder: (context, snapshot){
+              // ✅ Use the new parseUserStatus method for cleaner code
+              final statusData = APIS.parseUserStatus(snapshot.data, widget.user);
+
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    widget.user.name,
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    statusData['statusText'],
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: statusData['isOnline'] ? Colors.green : Colors.grey,
+                    ),
+                  ),
+                ],
+              );
+            },
           )
         ],
       ),
     );
   }
-
 
   Widget _chatInput() {
     return Padding(
@@ -232,15 +224,14 @@ class _ChatScreenState extends State<ChatScreen> {
               child: Row(
                 children: [
 
-
                   // Emoji icon
                   IconButton(
                     icon: Icon(
                       _isEmojiPickerVisible
                           ? Icons.keyboard
                           : Icons.emoji_emotions_outlined,
-                        // Icons.emoji_emotions_outlined),
-              ),
+                      // Icons.emoji_emotions_outlined),
+                    ),
                     color: Theme.of(context).colorScheme.primary,
                     onPressed: (){
                       // Show the emoji picker
@@ -250,8 +241,6 @@ class _ChatScreenState extends State<ChatScreen> {
                       });
                     },
                   ),
-
-
 
                   // Text input field
                   Expanded(
@@ -277,8 +266,6 @@ class _ChatScreenState extends State<ChatScreen> {
                     ),
                   ),
 
-
-
                   IconButton(
                     icon: const Icon(Icons.attach_file),
                     onPressed: () {
@@ -292,8 +279,6 @@ class _ChatScreenState extends State<ChatScreen> {
 
           const SizedBox(width: 6),
 
-
-
           // Send button
           CircleAvatar(
             backgroundColor: Theme.of(context).colorScheme.primary,
@@ -304,8 +289,8 @@ class _ChatScreenState extends State<ChatScreen> {
                   : () {
                 final message = _textController.text.trim();
                 // if (_textController.text.isNotEmpty){
-                    APIS.sendMessage(widget.user, message);
-              // }
+                APIS.sendMessage(widget.user, message);
+                // }
                 print('Sending: ${message}');
                 _textController.clear();
                 // Hide emoji picker after sending
@@ -323,20 +308,3 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 }
-
-
-// final emoji = await AwesomeEmojiPicker.pickEmoji(
-//   context: context,
-//   config: const EmojiPickerConfig(
-//     columns: 8,
-//     emojiSizeMax: 32,
-//     enableSkinTones: true,
-//     recentsLimit: 28,
-//   ),
-// );
-// if (emoji != null) {
-//   _textController.text += emoji.emoji; // Append to existing text
-//   _textController.selection = TextSelection.fromPosition(
-//     TextPosition(offset: _textController.text.length),
-//   );
-// }
