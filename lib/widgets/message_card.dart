@@ -1,5 +1,3 @@
-import 'dart:developer';
-
 import 'package:connect/APIs/apis.dart';
 import 'package:connect/helper/my_date_util.dart';
 import 'package:flutter/material.dart';
@@ -18,15 +16,24 @@ class MessageCard extends StatefulWidget {
 }
 
 class _MessageCardState extends State<MessageCard> {
+  String? displayText;
+  bool isLoading = true;
 
-  // @override
-  // void initState() {
-  //   super.initState();
-  //   // Automatically mark message as read if it's from the other user and not yet read
-  //   if (widget.message.read.isEmpty && widget.message.fromID != APIS.user.uid) {
-  //     APIS.updateMessageReadStatus(widget.message);
-  //   }
-  // }
+  @override
+  void initState() {
+    super.initState();
+    _loadDisplayText();
+  }
+
+  Future<void> _loadDisplayText() async {
+    final text = await APIS.getDisplayText(widget.message, "fr");
+    if (mounted) {
+      setState(() {
+        displayText = text;
+        isLoading = false;
+      });
+    }
+  }
 
 
   @override

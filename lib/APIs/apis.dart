@@ -1,10 +1,11 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:developer';
-
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:connect/models/chat_user.dart';
 import 'package:connect/models/messages.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:http/http.dart' as http;
 
 class APIS{
   //for authentication
@@ -25,8 +26,15 @@ class APIS{
   // App lifecycle tracking
   static bool _isAppInForeground = true;
 
+  // 🔥 ADD THIS NEAR THE TOP (around line 26):
+  static String? _currentDeviceId;
+  static bool _isInitialized = false;
+
   // Track if presence tracking is active
   static bool _isPresenceTrackingActive = false;
+
+  // Prevent multiple simultaneous presence updates (CRASH FIX)
+  static bool _isUpdatingPresence = false;
 
   // to check if a user exists or not
   static Future<bool> userExists() async{
@@ -39,20 +47,43 @@ class APIS{
 
   // to get current user info
   static Future<void> getSelfInfo() async {
-    await firestore
-        .collection('users')
-        .doc(user.uid)
-        .get()
-        .then((user) async {
-      if(user.exists){
-        log('User Data:${user.data()}');
-        me = ChatUser.fromJson(user.data()!);
-        // IMPORTANT: Initialize presence tracking after getting user info
-        await initializePresence();
-      }else {
-        await createUser().then((value) => getSelfInfo());
+    // timeout to prevent splashscreen stuck
+    try{
+      log('📱 Getting self info...');
+      await firestore
+          .collection('users')
+          .doc(user.uid)
+          .get()
+          .timeout(const Duration(seconds: 10)) //prevent infinite wait time
+          .then((user) async {
+        if(user.exists) {
+          log('User Data:${user.data()}');
+          me = ChatUser.fromJson(user.data()!);
+          // Initialize presence tracking once per session
+          if (!_isInitialized) {
+            _isInitialized = true;
+            log('🔧 Initializing presence for first time...');
+            await initializePresence();
+          } else {
+            log('⚠️ Presence already initialized, skipping...');
+          }
+        } else{
+          log('👤 User does not exist, creating...');
+          await createUser().then((value) => getSelfInfo());
+        }
+      });
+    } catch (e) {
+      log('❌ Error getting self info: $e');
+      // 🔥 NEW: Don't hang the app - create user if timeout
+      if (e.toString().contains('TimeoutException')) {
+        log('⏰ Timeout occurred, creating user...');
+        try {
+          await createUser();
+        } catch (createError) {
+          log('❌ Error creating user after timeout: $createError');
+        }
       }
-    });
+    }
   }
 
   // to create a new user
@@ -100,6 +131,18 @@ class APIS{
   // Initialize presence tracking
   static Future<void> initializePresence() async {
     try {
+
+      // 🔥 NEW: Generate unique device ID to prevent conflicts
+      _currentDeviceId = DateTime.now().millisecondsSinceEpoch.toString();
+      log('🔧 Device ID: $_currentDeviceId');
+
+      // 🔥 NEW: Add device ID to prevent multi-emulator conflicts
+      if (_isPresenceTrackingActive) {
+        log('⚠️ Presence tracking already active for this device');
+        return;
+      }
+
+
       // Set user online when app starts
       await updateUserPresence(true);
       _startPresenceTracking();
@@ -111,7 +154,18 @@ class APIS{
 
   // **IMPROVED: Update user online/offline status**
   static Future<void> updateUserPresence(bool isOnline) async {
+
+    // 🔥 NEW: Prevent multiple simultaneous updates
+    if (_isUpdatingPresence) {
+      log('Presence update already in progress, skipping');
+      return;
+    }
+
     try {
+
+      // 🔥 NEW: Set flag to prevent concurrent updates
+      _isUpdatingPresence = true;
+
       // Check if user is still authenticated
       if (auth.currentUser == null) {
         log('User not authenticated, skipping presence update');
@@ -120,10 +174,18 @@ class APIS{
 
       final now = DateTime.now();
 
-      await firestore.collection('users').doc(user.uid).update({
+      // 🔥 NEW: Add device ID to update to prevent conflicts
+      final updateData = {
         'isOnline': isOnline,
         'lastActive': now,
-      });
+        'deviceId': _currentDeviceId ?? 'unknown', // Track which device is updating
+      };
+
+      await firestore.collection('users').doc(user.uid).update(updateData);
+      //     {
+      //   'isOnline': isOnline,
+      //   'lastActive': now,
+      // }
       try{
         // Update local user object if it exists
         me.isOnline = isOnline;
@@ -133,13 +195,16 @@ class APIS{
         log('Local user object not yet initialized: $e');
         // This is fine - means getSelfInfo() hasn't been called yet
       }
-      log('Updated presence: ${isOnline ? "Online" : "Offline"} at ${now.toString()}');
+      log('Updated presence: ${isOnline ? "Online" : "Offline"} at ${now.toString()} [Device: $_currentDeviceId');
     } catch (e) {
       log('Error updating presence: $e');
       // Optionally retry after a delay
-      if (isOnline) {
-        Timer(const Duration(seconds: 5), () => updateUserPresence(true));
-      }
+      // if (isOnline) {
+      //   Timer(const Duration(seconds: 5), () => updateUserPresence(true));
+      // }
+    } finally {
+      // 🔥 NEW: Always reset flag
+      _isUpdatingPresence = false;
     }
   }
 
@@ -155,18 +220,30 @@ class APIS{
 
     _isPresenceTrackingActive = true;
 
-    // Update presence every 30 seconds when app is active
-    _presenceTimer = Timer.periodic(const Duration(seconds: 30), (timer) {
+    // Update presence every 60 seconds when app is active
+    _presenceTimer = Timer.periodic(const Duration(seconds: 60), (timer) {
       if (_isAppInForeground && auth.currentUser != null) {
+        log('🔄 Periodic presence update triggered');
         updateUserPresence(true);
       } else {
         // Stop timer if app is in background or user logged out
         timer.cancel();
         _isPresenceTrackingActive = false;
+        log('⏹️ Presence tracking stopped');
       }
     });
 
     log('Started periodic presence tracking');
+  }
+
+  static Future<void> cleanupPreviousSession() async {
+    try {
+      // 🔥 NEW: Clear any hanging listeners from previous sessions
+      await firestore.clearPersistence();
+      log('✅ Cleared Firestore persistence');
+    } catch (e) {
+      log('⚠️ Could not clear persistence (normal on first run): $e');
+    }
   }
 
   // **NEW: Handle app lifecycle changes**
@@ -176,10 +253,12 @@ class APIS{
 
     if (isInForeground) {
       // App came to foreground - user is online
+      log('🟢 Setting user online...');
       await updateUserPresence(true);
       _startPresenceTracking();
     } else {
       // App went to background - user is offline
+      log('🔴 Setting user offline...');
       await updateUserPresence(false);
       _stopPresenceTracking();
     }
@@ -222,7 +301,7 @@ class APIS{
         .snapshots();
   }
 
-  // ✅ NEW: Get parsed user status data
+  // Get parsed user status data
   static Map<String, dynamic> parseUserStatus(DocumentSnapshot<Map<String, dynamic>>? snapshot, ChatUser fallbackUser) {
     // Default to offline if no data
     bool isOnline = false;
@@ -232,16 +311,30 @@ class APIS{
       final data = snapshot.data()!;
       isOnline = data['isOnline'] ?? false;
 
-      // ✅ Handle lastActive - it might be Timestamp or DateTime
+      // Handle lastActive - it might be Timestamp or DateTime
       if (data['lastActive'] != null) {
-        if (data['lastActive'] is Timestamp) {
-          lastActive = (data['lastActive'] as Timestamp).toDate();
-        } else if (data['lastActive'] is DateTime) {
-          lastActive = data['lastActive'];
+        try{
+          if (data['lastActive'] is Timestamp) {
+            lastActive = (data['lastActive'] as Timestamp).toDate();
+          } else if (data['lastActive'] is DateTime) {
+            lastActive = data['lastActive'];
+          } else if (data['lastActive'] is String) {
+            //  Handle string timestamps (milliseconds)
+            final timestamp = int.tryParse(data['lastActive']);
+            if (timestamp != null) {
+              lastActive = DateTime.fromMillisecondsSinceEpoch(timestamp);
+            }
+          }
+        } catch (e) {
+          log('⚠️ Error parsing lastActive: $e');
         }
+        // if (data['lastActive'] is Timestamp) {
+        //   lastActive = (data['lastActive'] as Timestamp).toDate();
+        // } else if (data['lastActive'] is DateTime) {
+        //   lastActive = data['lastActive'];
+        // }
       }
     }
-
     return {
       'isOnline': isOnline,
       'lastActive': lastActive,
@@ -249,11 +342,11 @@ class APIS{
     };
   }
 
-  // Check if user was recently active (within last 5 minutes)**
+  // Check if user was recently active (within last 2 minutes)**
   static bool wasRecentlyActive(DateTime lastActive) {
     final now = DateTime.now();
     final difference = now.difference(lastActive);
-    return difference.inMinutes <= 5;
+    return difference.inMinutes <= 2;
   }
 
   // Get user status string for display**
@@ -262,8 +355,10 @@ class APIS{
       return 'Online';
     } else if (wasRecentlyActive(lastActive)) {
       final difference = DateTime.now().difference(lastActive);
-      if (difference.inMinutes < 1) {
+      if (difference.inSeconds < 30){
         return 'Active now';
+      } else if (difference.inMinutes < 1) {
+        return 'Active ${difference.inSeconds}s ago';
       } else {
         return 'Active ${difference.inMinutes}m ago';
       }
@@ -272,14 +367,24 @@ class APIS{
       final now = DateTime.now();
       final difference = now.difference(lastActive);
 
-      if (difference.inDays > 0) {
+      if (difference.inDays > 7) {
+        return 'Last seen ${(difference.inDays/7).floor()}w ago';
+      } else if (difference.inDays > 0) {
         return 'Last seen ${difference.inDays}d ago';
-      } else if (difference.inHours > 0) {
+      } else if (difference.inHours > 0){
         return 'Last seen ${difference.inHours}h ago';
-      } else {
+      } else if(difference.inMinutes > 0){
         return 'Last seen ${difference.inMinutes}m ago';
+      } else {
+        return 'Last seen just now';
       }
     }
+  }
+
+  // Force refresh user status (useful for debugging)
+  static Future<void> forceRefreshStatus() async {
+    log('🔄 Force refreshing user status...');
+    await updateUserPresence(true);
   }
 
   // Debug method to manually set status (for testing)
@@ -329,24 +434,100 @@ class APIS{
         .snapshots();
   }
 
-  //for sending messages
-  static Future<void> sendMessage(ChatUser chatUser, String msg) async {
-    // message sending time
-    final time = DateTime.now().millisecondsSinceEpoch.toString();
+  // translate texts using my locally hosted server
+  static Future<String> translateText(String text, String targetLang) async {
 
-    // message to send
-    final Message message = Message(
-        toID: chatUser.id,
-        msg: msg,
-        read: '',
-        type: Type.text,
-        fromID: user.uid,
-        sent: time);
+    // List of URLs to try
+    final urls = [
+      'http://127.0.0.1:8000/translate',
+      'http://10.0.2.2:8000/translate',    // Android emulator
+      'http://localhost:8000/translate',    // iOS/general
+      'http://10.74.79.61:8000/translate', // Your machine's IP
+    ];
+    for (String url in urls) {
+      print('🔄 Trying URL: $url');
+    try {
+      final response = await http.post(
+        Uri.parse(url),
+        // Uri.parse('http://127.0.0.1:8000/translate'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'text': text,
+          // 'source_lang': 'auto', // automatic detection
+          'target_lang': targetLang,
+        }),
+      ).timeout(const Duration(seconds: 5));
 
-    final ref = firestore
-        .collection('chats/${getConversationID(chatUser.id)}/messages/');
-    await ref.doc(time).set(message.toJson());
+      print('📡 Response status: ${response.statusCode}');
+      print('📡 Translation response status: ${response.statusCode}'); // Debug
+      print('📡 Translation response body: ${response.body}'); // Debug
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        final translatedText = data['translated_text'] ?? text;
+        print('✅ Translation successful: "$translatedText"'); // Debug
+        return translatedText;
+        // return data['translated_text'];
+      } else {
+        print('Translation failed with status: ${response.statusCode}');
+      }
+    } catch (e) {
+     print('Failed with $url: $e');
+     continue;
+    }
   }
+    print('❌ All URLs failed, using original text');
+    return text;
+  }
+
+  //for sending messages
+  static Future<bool> sendMessage(ChatUser chatUser, String msg, String targetLang) async {
+    try{
+      if (msg.trim().isEmpty)
+        return false;
+
+      print('📤 Sending message: "$msg" to ${chatUser.name}'); // Debug
+
+      // // Translate text first
+
+      // final translatedMsg = await translateText(msg, targetLang);
+      // print('📝 Original: "$msg" | Translated: "$translatedMsg"'); // Debug
+
+
+      // message sending time
+      final time = DateTime.now().millisecondsSinceEpoch.toString();
+
+      // message to send
+      final Message message = Message(
+          toID: chatUser.id,
+          msg: msg,
+          originalMsg: msg,
+          read: '',
+          type: Type.text,
+          fromID: user.uid,
+          sent: time);
+
+      final ref = firestore
+          .collection('chats/${getConversationID(chatUser.id)}/messages/');
+      await ref.doc(time).set(message.toJson());
+      return true; // ✅ Return success status
+    } catch (e) {
+      print('Error sending message: $e'); // ✅ Add error handling
+      return false;
+    }
+  }
+
+  // Get display text (translate if needed)
+  static Future<String> getDisplayText(Message message, String targetLang) async {
+    // If it's your own message, show original
+    if (message.fromID == user.uid) {
+      return message.msg;
+    }
+
+    // If it's from someone else, translate it
+    return await translateText(message.msg, targetLang);
+  }
+
 
   // update read status of message
   static Future<void> updateMessageReadStatus(Message message) async {

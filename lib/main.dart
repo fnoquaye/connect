@@ -1,6 +1,11 @@
 // import 'package:connect/screens/auth/login_screen.dart';
+import 'dart:developer';
+
+import 'package:connect/screens/auth/login_screen.dart';
+import 'package:connect/screens/homescreen.dart';
 import 'package:connect/screens/splash_screen.dart';
 import 'package:connect/helper/theme_provider.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/services.dart';
@@ -13,19 +18,41 @@ late Size mq;
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-
   //enter fullscreen
   // SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
 // portrait only
   await SystemChrome.setPreferredOrientations([
-    DeviceOrientation.portraitUp, DeviceOrientation.portraitDown]);
+    DeviceOrientation.portraitUp,
+    DeviceOrientation.portraitDown
+  ]);
+
        await _initializeFirebase();
+       await initializeApp();
+
         runApp(
             ChangeNotifierProvider(
                 create:(_)=> ThemeProvider(),
-        child: const MyApp(),
+                child: const MyApp(),
             ));
 }
+
+Future<void> initializeApp() async {
+  try {
+    log('🚀 Starting app initialization...');
+    // 🔥 NEW: Add timeout to prevent splash screen hanging
+    await APIS.getSelfInfo().timeout(
+      const Duration(seconds: 15),
+      onTimeout: () {
+        log('⏰ App initialization timed out, continuing anyway...');
+      },
+    );
+    log('✅ App initialization completed');
+  } catch (e) {
+    log('❌ App initialization error: $e');
+    // Don't block the app - continue to home screen
+  }
+}
+
 
 class MyApp extends StatefulWidget {
   const MyApp({super.key});
@@ -117,12 +144,34 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
           backgroundColor: Colors.black,
         ),
       ),
-      home: const SplashScreen(),
+      home: StreamBuilder<User?>(
+          stream: FirebaseAuth.instance.authStateChanges(),
+          builder: (context, snapshot){
+    // Show splash screen while loading
+    if (snapshot.connectionState == ConnectionState.waiting) {
+    return const SplashScreen();
+    }
+
+    // If there's an error, show splash screen (which will handle the error)
+    if (snapshot.hasError) {
+    log('❌ Auth stream error: ${snapshot.error}');
+    return const SplashScreen();
+      }
+    // Check if user is authenticated
+    if (snapshot.hasData && snapshot.data != null) {
+    log('✅ User is authenticated: ${snapshot.data!.uid}');
+    return const HomeScreen();
+    } else {
+    log('ℹ️ User is not authenticated');
+    return const LoginScreen();
+       }
+      }
+      ),
     );
   }
 }
 
-_initializeFirebase() async{
+Future<void> _initializeFirebase() async{
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );

@@ -54,7 +54,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
             // ],
           ),
 
-          //new chat button
+
+
+          // Sign Out Button
+
           floatingActionButton: Padding(
             padding: const EdgeInsets.all(8.0),
             child: FloatingActionButton.extended(
@@ -80,128 +83,135 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ),
           ),
 
+          // BODY!!
+
           body: Form(
             key: _formkey,
             child: Padding(
               padding:  EdgeInsets.symmetric(horizontal: mq.width * 0.05),
               child: SingleChildScrollView(
-                child: Column(
-                  children: [
-                    //space with sizedbox
-                    SizedBox(width: mq.width, height: mq.height * 0.03),
-                    //profile picture
-                      Stack(
-                        children: [
-                          //profile picture
-                          _image != null ?
+                child: ConstrainedBox(constraints: BoxConstraints(minHeight: mq.height),
+                  child: IntrinsicHeight(
+                    child: Column(
+                      children: [
+                        //space with sizedbox
+                        SizedBox(width: mq.width, height: mq.height * 0.03),
+                        //profile picture
+                        Stack(
+                            children: [
+                              //profile picture
+                              _image != null ?
                               //local image
-                          ClipRRect(
-                            borderRadius: BorderRadius.circular(mq.height * 0.1),
-                            child: Image.file(
-                              File(_image!),
-                              width: mq.height * 0.2,
-                              height: mq.height * 0.2,
-                              fit: BoxFit.cover,
-                            )
-                          )
-                              :
+                              ClipRRect(
+                                  borderRadius: BorderRadius.circular(mq.height * 0.1),
+                                  child: Image.file(
+                                    File(_image!),
+                                    width: mq.height * 0.2,
+                                    height: mq.height * 0.2,
+                                    fit: BoxFit.cover,
+                                  )
+                              )
+                                  :
                               //image from server
-                          ClipRRect(
-                        borderRadius: BorderRadius.circular(mq.height * 0.1),
-                        child: CachedNetworkImage(
-                          width: mq.height * 0.2,
-                          height: mq.height * 0.2,
-                          fit: BoxFit.cover,
-                          imageUrl: widget.user.image,
-                          placeholder: (context, url) => CircularProgressIndicator(),
-                          errorWidget: (context, url, error) => CircleAvatar(child: Icon(CupertinoIcons.person)),
-                        ),
-                          ),
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(mq.height * 0.1),
+                                child: CachedNetworkImage(
+                                  width: mq.height * 0.2,
+                                  height: mq.height * 0.2,
+                                  fit: BoxFit.cover,
+                                  imageUrl: widget.user.image,
+                                  placeholder: (context, url) => CircularProgressIndicator(),
+                                  errorWidget: (context, url, error) => CircleAvatar(child: Icon(CupertinoIcons.person)),
+                                ),
+                              ),
 
-                          //edit image button
-                          Positioned(
-                            bottom: 0,
-                            right: 0,
-                            child: MaterialButton(
-                              elevation: 1,
-                                onPressed: (){
-                                 _showBottomSheet();
-                                },
-                                shape: const CircleBorder(),
-                                child: Icon(Icons.edit),
-                                color: Colors.blue,
+                              //edit image button
+                              Positioned(
+                                bottom: 0,
+                                right: 0,
+                                child: MaterialButton(
+                                  elevation: 1,
+                                  onPressed: (){
+                                    _showBottomSheet();
+                                  },
+                                  shape: const CircleBorder(),
+                                  child: Icon(Icons.edit),
+                                  color: Colors.blue,
+                                ),
+                              ),
+                            ]),
+
+                        SizedBox(width: mq.width, height: mq.height * 0.03),
+
+                        //user email label
+                        Text(widget.user.email,
+                          style: const TextStyle(fontSize: 18),
+                        ),
+
+                        SizedBox(width: mq.width, height: mq.height * 0.07),
+
+
+                        TextFormField(
+                          initialValue: widget.user.name,
+                          onSaved: (val) => APIS.me.name = val ?? '',
+                          validator: (val) => val != null && val.isNotEmpty ? null: 'Required Field',
+                          decoration: InputDecoration(
+                              prefixIcon: const Icon(Icons.person, color: Colors.blue,),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              // hintText: '',
+                              label: const Text ('Name')
+                          ),
+                        ),
+
+                        SizedBox(width: mq.width, height: mq.height * 0.04),
+
+
+                        TextFormField(
+                          initialValue: widget.user.about,
+                          onSaved: (val) => APIS.me.about = val ?? '',
+                          validator: (val) => val != null && val.isNotEmpty ? null: 'Required Field',
+                          decoration: InputDecoration(
+                              prefixIcon: const Icon(Icons.info_outline, color: Colors.blue),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              hintText: 'eg. Feeling Happy',
+                              label: const Text ('About')
+                          ),
+                        ),
+
+                        SizedBox(width: mq.width, height: mq.height * 0.07),
+
+                        //update profile button
+                        ElevatedButton.icon(
+                            style: ElevatedButton.styleFrom(
+                                shape: const StadiumBorder(),
+                                minimumSize: Size(mq.width * .7, mq.height * 0.07)
                             ),
-                          ),
-                      ]),
+                            onPressed: (){
+                              if(_formkey.currentState!.validate()){
+                                _formkey.currentState!.save();
+                                print('Updated name: ${APIS.me.name}');
+                                print('Updated about: ${APIS.me.about}');
 
-                    SizedBox(width: mq.width, height: mq.height * 0.03),
-
-                    //user email label
-                    Text(widget.user.email,
-                      style: const TextStyle(fontSize: 18),
+                                APIS.UpdateUserInfo().then((value){
+                                  Dialogs.showSnackbar(context, 'Profile Updated Successfully');
+                                }).catchError((e){
+                                  print('Update Error: $e');
+                                });
+                              }
+                            },
+                            icon: Icon(Icons.edit),
+                            label: const Text('Update',
+                              style: TextStyle(fontSize: 20),
+                            ))
+                      ],
                     ),
+                  ),
+                )
 
-                    SizedBox(width: mq.width, height: mq.height * 0.07),
-
-
-                    TextFormField(
-                      initialValue: widget.user.name,
-                      onSaved: (val) => APIS.me.name = val ?? '',
-                      validator: (val) => val != null && val.isNotEmpty ? null: 'Required Field',
-                      decoration: InputDecoration(
-                        prefixIcon: const Icon(Icons.person, color: Colors.blue,),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        // hintText: '',
-                        label: const Text ('Name')
-                      ),
-                    ),
-
-                    SizedBox(width: mq.width, height: mq.height * 0.04),
-
-
-                    TextFormField(
-                      initialValue: widget.user.about,
-                      onSaved: (val) => APIS.me.about = val ?? '',
-                      validator: (val) => val != null && val.isNotEmpty ? null: 'Required Field',
-                      decoration: InputDecoration(
-                          prefixIcon: const Icon(Icons.info_outline, color: Colors.blue),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          hintText: 'eg. Feeling Happy',
-                          label: const Text ('About')
-                      ),
-                    ),
-
-                    SizedBox(width: mq.width, height: mq.height * 0.07),
-
-                    //update profile button
-                    ElevatedButton.icon(
-                      style: ElevatedButton.styleFrom(
-                        shape: const StadiumBorder(),
-                        minimumSize: Size(mq.width * .7, mq.height * 0.07)
-                      ),
-                        onPressed: (){
-                        if(_formkey.currentState!.validate()){
-                          _formkey.currentState!.save();
-                          print('Updated name: ${APIS.me.name}');
-                          print('Updated about: ${APIS.me.about}');
-
-                          APIS.UpdateUserInfo().then((value){
-                            Dialogs.showSnackbar(context, 'Profile Updated Successfully');
-                          }).catchError((e){
-                            print('Update Error: $e');
-                          });
-                        }
-                        },
-                        icon: Icon(Icons.edit),
-                        label: const Text('Update',
-                          style: TextStyle(fontSize: 20),
-                        ))
-                  ],
-                ),
               ),
             ),
           )

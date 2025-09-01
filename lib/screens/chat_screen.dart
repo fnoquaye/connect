@@ -8,6 +8,7 @@ import 'package:connect/models/messages.dart';
 import 'package:connect/widgets/message_card.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'dart:async';
 
 import '../main.dart';
 
@@ -21,12 +22,38 @@ class ChatScreen extends StatefulWidget {
 }
 
 class _ChatScreenState extends State<ChatScreen> {
+  // 🔥 NEW: Cache streams to prevent recreation
+  Stream<QuerySnapshot>? _messagesStream;
+  Stream<DocumentSnapshot<Map<String, dynamic>>>? _userStatusStream;
+
+  @override
+  void initState() {
+    super.initState();
+    // Initialize streams once
+    _messagesStream = APIS.getAllMessages(widget.user);
+    _userStatusStream = APIS.getUserStatus(widget.user.id);
+  }
+
   bool _isEmojiPickerVisible = false;
 
   //for storing all messages
   List<Message> _list = [];
   // for handling message text changes
   final TextEditingController _textController = TextEditingController();
+  bool _isSending = false;
+
+  // 🔥Track last text state to reduce rebuilds (PERFORMANCE FIX)
+  bool _lastTextEmpty = true;
+
+  Timer? _textChangeDebouncer;
+  String _lastText = '';
+
+  @override
+  void dispose() {
+    _textChangeDebouncer?.cancel(); // 🔥 NEW: Cancel debouncer
+    _textController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -56,6 +83,9 @@ class _ChatScreenState extends State<ChatScreen> {
             automaticallyImplyLeading: false,
             flexibleSpace: _appBar(),
           ),
+
+
+
           //body
           body: Column(
             children: [
@@ -83,12 +113,19 @@ class _ChatScreenState extends State<ChatScreen> {
                               [];
 
                           // Check and mark unread messages as read
-                          for (var message in _list) {
-                            if (message.read.isEmpty && message.fromID != APIS.user.uid) {
-                              log('Marking message as read: ${message.msg}');
-                              APIS.updateMessageReadStatus(message);
-                            }
-                          }
+
+
+                          // for (var message in _list) {
+                          //   if (message.read.isEmpty && message.fromID != APIS.user.uid) {
+                          //     log('Marking message as read: ${message.msg}');
+                          //     APIS.updateMessageReadStatus(message);
+                          //   }
+                          // }
+
+                          // 🔥 MODIFIED: Check and mark unread messages as read (moved outside of setState)
+                          WidgetsBinding.instance.addPostFrameCallback((_) {
+                            _markUnreadMessagesAsRead();
+                          });
 
                           if(_list.isNotEmpty){
                             return  ListView.builder(
@@ -97,10 +134,15 @@ class _ChatScreenState extends State<ChatScreen> {
                                 // padding: EdgeInsets.only(top: mq.height * 0.01),
                                 physics: BouncingScrollPhysics(),
                                 reverse: true,
-                                // padding: EdgeInsets.all(2.0),
+                                // 🔥 NEW: Add item extent for better performance
+                                itemExtent: null, // Let Flutter calculate
+                                cacheExtent: 1000, // Cache more items
                                 itemBuilder: (context, index){
                                   final reversedIndex = _list.length - 1 - index;
-                                  return MessageCard(message: _list[reversedIndex]);
+                                  return MessageCard(
+                                      key:  ValueKey(_list[reversedIndex].sent), // Add key for better performance,
+                                      message: _list[reversedIndex]
+                                  );
                                 }
                             );
                           }else{
@@ -119,34 +161,77 @@ class _ChatScreenState extends State<ChatScreen> {
               ),
 
               _chatInput(),
-
               // Fixed emoji picker for v4.3.0 syntax
-              if (_isEmojiPickerVisible)
-                SizedBox(
-                  height: 250,
-                  child: EmojiPicker(
-                    onEmojiSelected: (Category? category, Emoji emoji) {
-                      _textController.text += emoji.emoji;
-                      _textController.selection = TextSelection.fromPosition(
-                        TextPosition(offset: _textController.text.length),
-                      );
-                    },
-                    // V4+ uses simple constructor parameters instead of Config object
-                    onBackspacePressed: () {
-                      _textController
-                        ..text = _textController.text.characters.skipLast(1).toString()
-                        ..selection = TextSelection.fromPosition(
-                            TextPosition(offset: _textController.text.length));
-                    },
-                  ),
-                ),
-
+              if (_isEmojiPickerVisible)  _buildEmojiPicker(),
             ],
           ),
         ),
       ),
     );
   }
+
+  // 🔥 NEW: Separate method to mark messages as read (PERFORMANCE FIX)
+  void _markUnreadMessagesAsRead() {
+    for (var message in _list) {
+      if (message.read.isEmpty && message.fromID != APIS.user.uid) {
+        log('Marking message as read: ${message.msg}');
+        APIS.updateMessageReadStatus(message);
+      }
+    }
+  }
+
+  Widget _buildEmojiPicker(){
+   return SizedBox(
+      height: 250,
+      child: EmojiPicker(
+        onEmojiSelected: (Category? category, Emoji emoji) {
+
+          final currentText = _textController.text;
+          final selection = _textController.selection;
+          final newText = currentText.replaceRange(
+            selection.start,
+            selection.end,
+            emoji.emoji,
+          );
+
+          _textController.value = TextEditingValue(
+            text: newText,
+            selection: TextSelection.collapsed(
+              offset: selection.start + emoji.emoji.length,
+            ),
+          );
+          // _textController.text += emoji.emoji;
+          // _textController.selection = TextSelection.fromPosition(
+          //   TextPosition(offset: _textController.text.length),
+          // );
+
+          // 🔥 NEW: Update button state after emoji selection
+          _handleTextChange(newText);
+          // _handleTextChange(_textController.text);
+        },
+        // V4+ uses simple constructor parameters instead of Config object
+        onBackspacePressed: () {
+    final text = _textController.text;
+    if (text.isNotEmpty) {
+      final newText = text.characters.skipLast(1).toString();
+      _textController.text = newText;
+      _textController.selection = TextSelection.fromPosition(
+        TextPosition(offset: newText.length),
+      );
+      // onBackspacePressed: () {
+      //   _textController
+      //     ..text = _textController.text.characters.skipLast(1).toString()
+      //     ..selection = TextSelection.fromPosition(
+      //         TextPosition(offset: _textController.text.length));
+
+      // 🔥 NEW: Update button state after backspace
+      _handleTextChange(newText);
+    }
+    },
+      ),
+    );
+  }
+
 
   Widget _appBar(){
     return InkWell(
@@ -171,11 +256,11 @@ class _ChatScreenState extends State<ChatScreen> {
           ),
 
           const SizedBox(width: 10),
-          // ✅ Name and status with cleaner StreamBuilder
+          // Name and status with cleaner StreamBuilder
           StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
             stream: APIS.getUserStatus(widget.user.id),
             builder: (context, snapshot){
-              // ✅ Use the new parseUserStatus method for cleaner code
+              // Use the new parseUserStatus method for cleaner code
               final statusData = APIS.parseUserStatus(snapshot.data, widget.user);
 
               return Column(
@@ -260,9 +345,20 @@ class _ChatScreenState extends State<ChatScreen> {
                           });
                         }
                       },
-                      onChanged: (value) {
-                        setState(() {}); // to toggle send button
-                      },
+
+                      onChanged: _handleTextChange,
+                        // setState(() {}); // to toggle send button
+
+                      //   onChanged: (value) {
+                      //   // // Only rebuild if send button state needs to change
+                      //   // final isEmpty = value.trim().isEmpty;
+                      //   // final wasEmpty = _lastTextEmpty ?? true;
+                      //   //
+                      //   // if (isEmpty != wasEmpty) {
+                      //   //   setState(() {
+                      //   //     _lastTextEmpty = isEmpty;
+                      //   //   });
+                      // },
                     ),
                   ),
 
@@ -283,28 +379,125 @@ class _ChatScreenState extends State<ChatScreen> {
           CircleAvatar(
             backgroundColor: Theme.of(context).colorScheme.primary,
             child: IconButton(
-              icon: const Icon(Icons.send, color: Colors.white),
-              onPressed: _textController.text.trim().isEmpty
+              icon: _isSending // Add loading state variable
+                  ? const SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(
+                  color: Colors.white,
+                  strokeWidth: 2,
+                ),
+              )
+
+                  : const Icon(Icons.send, color: Colors.white),
+              onPressed: _lastTextEmpty || _isSending // 🔥 CHANGED: Use _lastTextEmpty instead of checking text every time
+              // onPressed: _textController.text.trim().isEmpty || _isSending // ✅ Disable when sending
                   ? null
-                  : () {
+                  : () async { // Make async
                 final message = _textController.text.trim();
-                // if (_textController.text.isNotEmpty){
-                APIS.sendMessage(widget.user, message);
-                // }
-                print('Sending: ${message}');
-                _textController.clear();
-                // Hide emoji picker after sending
-                if (_isEmojiPickerVisible) {
-                  setState(() {
-                    _isEmojiPickerVisible = false;
+
+                setState(() {
+                  _isSending = true; // Show loading
+                });
+
+                try {
+                  final success = await APIS.sendMessage(widget.user, message, "fr");
+
+                  if (success) {
+                    _textController.clear();
+                    // 🔥 NEW: Update text state after clearing
+                    _handleTextChange('');
+                    print('Message sent successfully');
+
+                    // Hide emoji picker after sending
+                    if (_isEmojiPickerVisible) {
+                      setState(() {
+                        _isEmojiPickerVisible = false;
+                      });
+                    }
+                  } else {
+                    // Show error to user
+
+                    if (mounted){ // 🔥 NEW: Check if widget is still mounted (CRASH FIX)
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Failed to send message')),
+                      );
+                    }
+                  }
+                }  catch (e) {
+                  log('Error sending message: $e');
+                  if (mounted) { // 🔥 NEW: Check if widget is still mounted (CRASH FIX)
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Error sending message')),
+                    );
+                  }
+                } finally {
+
+                 if (mounted){
+                   setState(() {
+                     _isSending = false; // Hide loading
                   });
                 }
-                setState(() {}); // to disable send button again
+                }
               },
             ),
           ),
+          // CircleAvatar(
+          //   backgroundColor: Theme.of(context).colorScheme.primary,
+          //   child: IconButton(
+          //     icon:
+          //     const Icon(Icons.send, color: Colors.white),
+          //     onPressed: _textController.text.trim().isEmpty
+          //         ? null
+          //         : () {
+          //       final message = _textController.text.trim();
+          //       // if (_textController.text.isNotEmpty){
+          //       APIS.sendMessage(widget.user, message,"fr");
+          //       // }
+          //       print('Sending: ${message}');
+          //       _textController.clear();
+          //       // Hide emoji picker after sending
+          //       if (_isEmojiPickerVisible) {
+          //         setState(() {
+          //           _isEmojiPickerVisible = false;
+          //         });
+          //       }
+          //       setState(() {}); // to disable send button again
+          //     },
+          //   ),
+          // ),
         ],
       ),
     );
   }
+
+
+  // 🔥 NEW: Optimized text change handler (PERFORMANCE FIX - reduces rebuilds)
+  void _handleTextChange(String value) {
+
+    // Skip if the text hasn't actually changed
+    if (value == _lastText) return;
+    // 🔥 NEW: Update last text immediately to prevent unnecessary calls
+    _lastText = value;
+
+    // 🔥 NEW: Debounce rapid typing to prevent crashes
+    _textChangeDebouncer?.cancel();
+    _textChangeDebouncer = Timer(const Duration(milliseconds: 150), () {
+      if (!mounted) return;
+      final isEmpty = value.trim().isEmpty;
+      if (isEmpty != _lastTextEmpty && mounted) {
+        setState(() {
+          _lastTextEmpty = isEmpty;
+        });
+      }
+    });
+    //
+    // final isEmpty = value.trim().isEmpty;
+    // if (isEmpty != _lastTextEmpty) {
+    //   setState(() {
+    //     _lastTextEmpty = isEmpty;
+    //   });
+    // }
+  }
+
 }
