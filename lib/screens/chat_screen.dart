@@ -10,6 +10,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'dart:async';
 
+import '../helper/chat_input_bar.dart';
 import '../main.dart';
 
 class ChatScreen extends StatefulWidget {
@@ -22,8 +23,11 @@ class ChatScreen extends StatefulWidget {
 }
 
 class _ChatScreenState extends State<ChatScreen> {
+
+  final ValueNotifier<bool> _isTextEmpty = ValueNotifier(true);
+
   // 🔥 NEW: Cache streams to prevent recreation
-  Stream<QuerySnapshot>? _messagesStream;
+  Stream<QuerySnapshot<Map<String, dynamic>>>? _messagesStream;
   Stream<DocumentSnapshot<Map<String, dynamic>>>? _userStatusStream;
 
   // String _selectedTargetLanguage = 'fr'; // Default to French
@@ -51,8 +55,6 @@ class _ChatScreenState extends State<ChatScreen> {
     // Initialize streams once
     _messagesStream = APIS.getAllMessages(widget.user);
     _userStatusStream = APIS.getUserStatus(widget.user.id);
-
-    // Load current user's preferred language
     _loadMyPreferredLanguage();
   }
 
@@ -65,17 +67,12 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
-  bool _isEmojiPickerVisible = false;
+  final ValueNotifier<bool> _isEmojiPickerVisible = ValueNotifier(false);
 
   //for storing all messages
   List<Message> _list = [];
   // for handling message text changes
   final TextEditingController _textController = TextEditingController();
-  bool _isSending = false;
-
-  // 🔥Track last text state to reduce rebuilds (PERFORMANCE FIX)
-  bool _lastTextEmpty = true;
-
   Timer? _textChangeDebouncer;
   String _lastText = '';
 
@@ -83,6 +80,8 @@ class _ChatScreenState extends State<ChatScreen> {
   void dispose() {
     _textChangeDebouncer?.cancel(); // 🔥 NEW: Cancel debouncer
     _textController.dispose();
+    _isEmojiPickerVisible.dispose();
+    _isTextEmpty.dispose();
     super.dispose();
   }
 
@@ -93,11 +92,11 @@ class _ChatScreenState extends State<ChatScreen> {
       onPopInvokedWithResult: (didPop, result) {
         if (didPop) return; // Already handled
         // **SMART BACK BUTTON LOGIC: Handle emoji picker/keyboard before exiting**
-        if (_isEmojiPickerVisible) {
+        if (_isEmojiPickerVisible.value) {
           // Close emoji picker first
-          setState(() {
-            _isEmojiPickerVisible = false;
-          });
+          _isEmojiPickerVisible.value = false;
+          // _isEmojiPickerVisible.value = !_isEmojiPickerVisible.value;
+
         } else if (FocusScope.of(context).hasFocus) {
           // Close keyboard if it's open
           FocusScope.of(context).unfocus();
@@ -123,8 +122,7 @@ class _ChatScreenState extends State<ChatScreen> {
               Expanded(
                 child: StreamBuilder(
                   // stream: APIS.firestore.collection('users').snapshots(),
-                    stream: APIS.getAllMessages(widget.user),
-                    //   stream: Stream.empty(),
+                    stream: _messagesStream,
                     builder: (context, snapshot){
                       switch (snapshot.connectionState){
                       //if data is loading
@@ -191,9 +189,23 @@ class _ChatScreenState extends State<ChatScreen> {
                 ),
               ),
 
-              _chatInput(),
+              ChatInputBar(
+                recipient: widget.user,
+                isEmojiPickerVisible: _isEmojiPickerVisible,
+                textController: _textController,
+                onTextChanged: _handleTextChange,
+                onSend: (msg) async => await APIS.sendMessage(widget.user, msg),
+              ),
+
+              // _chatInput(),
               // Fixed emoji picker for v4.3.0 syntax
-              if (_isEmojiPickerVisible)  _buildEmojiPicker(),
+              ValueListenableBuilder<bool>(
+                valueListenable: _isEmojiPickerVisible,
+                builder: (context, isVisible, child) {
+                  return isVisible ? _buildEmojiPicker() : const SizedBox.shrink();
+                },
+              )
+              // if (_isEmojiPickerVisible)  _buildEmojiPicker(),
             ],
           ),
         ),
@@ -231,16 +243,8 @@ class _ChatScreenState extends State<ChatScreen> {
               offset: selection.start + emoji.emoji.length,
             ),
           );
-          // _textController.text += emoji.emoji;
-          // _textController.selection = TextSelection.fromPosition(
-          //   TextPosition(offset: _textController.text.length),
-          // );
-
-          // 🔥 NEW: Update button state after emoji selection
           _handleTextChange(newText);
-          // _handleTextChange(_textController.text);
         },
-        // V4+ uses simple constructor parameters instead of Config object
         onBackspacePressed: () {
     final text = _textController.text;
     if (text.isNotEmpty) {
@@ -249,12 +253,6 @@ class _ChatScreenState extends State<ChatScreen> {
       _textController.selection = TextSelection.fromPosition(
         TextPosition(offset: newText.length),
       );
-      // onBackspacePressed: () {
-      //   _textController
-      //     ..text = _textController.text.characters.skipLast(1).toString()
-      //     ..selection = TextSelection.fromPosition(
-      //         TextPosition(offset: _textController.text.length));
-
       // 🔥 NEW: Update button state after backspace
       _handleTextChange(newText);
     }
@@ -293,7 +291,7 @@ class _ChatScreenState extends State<ChatScreen> {
           // Name and status with cleaner StreamBuilder
           Expanded(
             child: StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-              stream: APIS.getUserStatus(widget.user.id),
+              stream: _userStatusStream,
               builder: (context, snapshot){
                 // Use the new parseUserStatus method for cleaner code
                 final statusData = APIS.parseUserStatus(snapshot.data, widget.user);
@@ -334,258 +332,16 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 
-  Widget _chatInput() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 5.0, vertical: 5.0),
-      child: Row(
-        children: [
-          Expanded(
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8),
-              decoration: BoxDecoration(
-                color: Theme.of(context)
-                    .colorScheme.
-                surfaceContainerHighest.
-                withValues(alpha: 0.3),
-                borderRadius: BorderRadius.circular(25),
-              ),
-              child: Row(
-                children: [
-
-                  // Emoji icon
-                  IconButton(
-                    icon: Icon(
-                      _isEmojiPickerVisible
-                          ? Icons.keyboard
-                          : Icons.emoji_emotions_outlined,
-                      // Icons.emoji_emotions_outlined),
-                    ),
-                    color: Theme.of(context).colorScheme.primary,
-                    onPressed: (){
-                      // Show the emoji picker
-                      setState(() {
-                        _isEmojiPickerVisible = !_isEmojiPickerVisible;
-                        if (_isEmojiPickerVisible) FocusScope.of(context).unfocus();
-                      });
-                    },
-                  ),
-
-                  // // Add this to your _chatInput() method after the attach file button:
-                  // IconButton(
-                  //   icon: Icon(Icons.bug_report),
-                  //   onPressed: () async {
-                  //     print('🧪 Testing translation server...');
-                  //     await APIS.testTranslation();
-                  //   },
-                  // ),
-
-                  // Add this temporarily to your _chatInput() method or anywhere in your UI
-                  // ElevatedButton(
-                  //   onPressed: () async {
-                  //     print('Testing server connectivity...');
-                  //     await APIS.testServerConnectivity();
-                  //   },
-                  //   child: Text('Test Server'),
-                  // ),
-
-                  // Text input field
-                  Expanded(
-                    child: TextField(
-                      keyboardType: TextInputType.multiline,
-                      maxLines: null,
-                      controller: _textController,
-                      decoration: const InputDecoration(
-                        hintText: 'Type a message...',
-                        border: InputBorder.none,
-                      ),
-                      onTap: () {
-                        // Hide emoji picker when text field is focused
-                        if (_isEmojiPickerVisible) {
-                          setState(() {
-                            _isEmojiPickerVisible = false;
-                          });
-                        }
-                      },
-
-                      onChanged: _handleTextChange,
-                        // setState(() {}); // to toggle send button
-
-                      //   onChanged: (value) {
-                      //   // // Only rebuild if send button state needs to change
-                      //   // final isEmpty = value.trim().isEmpty;
-                      //   // final wasEmpty = _lastTextEmpty ?? true;
-                      //   //
-                      //   // if (isEmpty != wasEmpty) {
-                      //   //   setState(() {
-                      //   //     _lastTextEmpty = isEmpty;
-                      //   //   });
-                      // },
-                    ),
-                  ),
-
-                  IconButton(
-                    icon: const Icon(Icons.attach_file),
-                    onPressed: () {
-                      // TODO: Handle file/media picker
-                    },
-                  ),
-                ],
-              ),
-            ),
-          ),
-
-          const SizedBox(width: 6),
-
-          // Send button
-          CircleAvatar(
-            backgroundColor: Theme.of(context).colorScheme.primary,
-            child: IconButton(
-              icon: _isSending // Add loading state variable
-                  ? const SizedBox(
-                width: 20,
-                height: 20,
-                child: CircularProgressIndicator(
-                  color: Colors.white,
-                  strokeWidth: 2,
-                ),
-              )
-
-                  : const Icon(Icons.send, color: Colors.white),
-              onPressed: _lastTextEmpty || _isSending //
-                  ? null
-                  : () async { // Make async
-                final message = _textController.text.trim();
-
-                // DEBUG: Check language values
-                print('🔍 DEBUG SEND:');
-                print('  - _myPreferredLanguage: "$_myPreferredLanguage"');
-                print('  - widget.user.preferredLanguage: "${widget.user.preferredLanguage}"');
-                print('  - widget.user.preferredLanguage.isEmpty: ${widget.user.preferredLanguage?.isEmpty}');
-
-                // Immediately clear the text field and update state
-                _textController.clear();
-
-                setState(() {
-                  _isSending = true; // Show loading
-                  _lastTextEmpty = true; // Reset text state immediately
-                });
-
-                // Cancel any pending debouncer
-                _textChangeDebouncer?.cancel();
-                _lastText = '';
-
-                try {
-                  final success = await APIS.sendMessage(widget.user, message)
-                      .timeout( const Duration(seconds: 10),
-                    onTimeout: (){
-                      print('❌ Send message timeout');
-                      return false;
-                    }
-                  );
-
-                  if (success) {
-                   if (mounted){
-                     _textController.clear();
-                     // 🔥 NEW: Update text state after clearing
-                     _handleTextChange('');
-                     print('Message sent successfully');
-
-                     // Hide emoji picker after sending
-                     if (_isEmojiPickerVisible) {
-                       setState(() {
-                         _isEmojiPickerVisible = false;
-                       });
-                     }
-                   }
-                  } else {
-                    // Show error to user
-                    if (mounted){ // Check if widget is still mounted (CRASH FIX)
-                      _textController.text = message; // Restore the message
-                      _handleTextChange(message); // Update button state
-
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Failed to send message')),
-                      );
-                    }
-                  }
-                }  catch (e) {
-                  log('Error sending message: $e');
-                  if (mounted) { // 🔥 NEW: Check if widget is still mounted (CRASH FIX)
-
-                    if (mounted) {
-                      // Restore the message on error
-                      _textController.text = message;
-                      _handleTextChange(message);
-
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text('Error sending message: ${e.toString()}'),
-                          backgroundColor: Colors.red,
-                        ),
-                      );
-                    }
-
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Error sending message')),
-                    );
-                  }
-                } finally {
-
-                 if (mounted){
-                   setState(() {
-                     _isSending = false; // Hide loading
-                  });
-                }
-                }
-              },
-            ),
-          ),
-          // CircleAvatar(
-          //   backgroundColor: Theme.of(context).colorScheme.primary,
-          //   child: IconButton(
-          //     icon:
-          //     const Icon(Icons.send, color: Colors.white),
-          //     onPressed: _textController.text.trim().isEmpty
-          //         ? null
-          //         : () {
-          //       final message = _textController.text.trim();
-          //       // if (_textController.text.isNotEmpty){
-          //       APIS.sendMessage(widget.user, message,"fr");
-          //       // }
-          //       print('Sending: ${message}');
-          //       _textController.clear();
-          //       // Hide emoji picker after sending
-          //       if (_isEmojiPickerVisible) {
-          //         setState(() {
-          //           _isEmojiPickerVisible = false;
-          //         });
-          //       }
-          //       setState(() {}); // to disable send button again
-          //     },
-          //   ),
-          // ),
-        ],
-      ),
-    );
-  }
-
-
   // 🔥 NEW: Optimized text change handler (PERFORMANCE FIX - reduces rebuilds)
   void _handleTextChange(String value) {
+    final isEmpty = value.trim().isEmpty;
 
-    // Skip if the text hasn't actually changed
     if (value == _lastText) return;
-    // 🔥 NEW: Update last text immediately to prevent unnecessary calls
     _lastText = value;
 
-    // Update button state immediately for better UX
-    final isEmpty = value.trim().isEmpty;
-    if (isEmpty != _lastTextEmpty) {
-      setState(() {
-        _lastTextEmpty = isEmpty;
-      });
+    if (_isTextEmpty.value != isEmpty) {
+      _isTextEmpty.value = isEmpty;
     }
-
     // 🔥 NEW: Debounce rapid typing to prevent crashes
     _textChangeDebouncer?.cancel();
     _textChangeDebouncer = Timer(const Duration(milliseconds: 150), () {
@@ -641,49 +397,3 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 }
-
-  // Add this method to show language picker
-  // void _showLanguagePicker() {
-  //   showDialog(
-  //     context: context,
-  //     builder: (context) => AlertDialog(
-  //       title: Text('Select Translation Language'),
-  //       content: Container(
-  //         width: double.minPositive,
-  //         child: ListView.builder(
-  //           shrinkWrap: true,
-  //           itemCount: _languages.length,
-  //           itemBuilder: (context, index) {
-  //             final langCode = _languages.keys.elementAt(index);
-  //             final langName = _languages[langCode]!;
-  //
-  //             return RadioListTile<String>(
-  //               title: Text(langName),
-  //               value: langCode,
-  //               groupValue: _selectedTargetLanguage,
-  //               onChanged: (value) {
-  //                 setState(() {
-  //                   _selectedTargetLanguage = value!;
-  //                 });
-  //                 Navigator.pop(context);
-  //               },
-  //             );
-  //           },
-  //         ),
-  //       ),
-  //       actions: [
-  //         TextButton(
-  //           onPressed: () => Navigator.pop(context),
-  //           child: Text('Cancel'),
-  //         ),
-  //       ],
-  //     ),
-  //   );
-  // }
-//
-// final isEmpty = value.trim().isEmpty;
-// if (isEmpty != _lastTextEmpty) {
-//   setState(() {
-//     _lastTextEmpty = isEmpty;
-//   });
-// }
