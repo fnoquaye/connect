@@ -1,12 +1,7 @@
-import 'dart:developer';
 import 'dart:async';
-
-import 'package:connect/screens/auth/login_screen.dart';
-import 'package:connect/screens/homescreen.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-
 import '../../main.dart';
 
 //Splash Screen
@@ -18,13 +13,20 @@ class SplashScreen extends StatefulWidget {
 }
 
 class _SplashScreen extends State<SplashScreen> {
-  bool _hasNavigated = false;
+  // bool _hasNavigated = false;
   StreamSubscription<User?>? _authSubscription;
 
   @override
   void initState() {
     super.initState();
-    _initializeAndNavigate();
+    SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+    SystemChrome.setSystemUIOverlayStyle(
+      const SystemUiOverlayStyle(
+        systemNavigationBarColor: Colors.transparent,
+        statusBarColor: Colors.transparent,
+      ),
+    );
+    // _initializeAndNavigate();
   }
 
 
@@ -34,103 +36,103 @@ class _SplashScreen extends State<SplashScreen> {
     super.dispose();
   }
 
-  Future<void> _initializeAndNavigate() async {
-    try {
-      // Exit fullscreen
-      SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
-      SystemChrome.setSystemUIOverlayStyle(
-          const SystemUiOverlayStyle(
-              systemNavigationBarColor: Colors.transparent,
-              statusBarColor: Colors.transparent
-          )
-      );
+  // Future<void> _initializeAndNavigate() async {
+  //   try {
+  //     // Exit fullscreen
+  //     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+  //     SystemChrome.setSystemUIOverlayStyle(
+  //         const SystemUiOverlayStyle(
+  //             systemNavigationBarColor: Colors.transparent,
+  //             statusBarColor: Colors.transparent
+  //         )
+  //     );
+  //
+  //     // Start listening to auth state changes immediately
+  //     _setupAuthListener();
+  //
+  //     // Wait for the splash screen display duration
+  //     await Future.delayed(const Duration(milliseconds: 3500));
+  //     // Wait for Firebase Auth to be ready and check auth state
+  //
+  //     // If we haven't navigated yet due to auth state changes, force a check
+  //     if (!_hasNavigated && mounted) {
+  //       await _performInitialAuthCheck();
+  //     }
+  //     // await _checkAuthStateAndNavigate();
+  //   } catch (e) {
+  //     log('❌ Splash screen error: $e');
+  //     if (!_hasNavigated && mounted) {
+  //       // If there's any error, default to login screen
+  //       _navigateToLogin();
+  //     }
+  //   }
+  // }
 
-      // Start listening to auth state changes immediately
-      _setupAuthListener();
-
-      // Wait for the splash screen display duration
-      await Future.delayed(const Duration(milliseconds: 3500));
-      // Wait for Firebase Auth to be ready and check auth state
-
-      // If we haven't navigated yet due to auth state changes, force a check
-      if (!_hasNavigated && mounted) {
-        await _performInitialAuthCheck();
-      }
-      // await _checkAuthStateAndNavigate();
-    } catch (e) {
-      log('❌ Splash screen error: $e');
-      if (!_hasNavigated && mounted) {
-        // If there's any error, default to login screen
-        _navigateToLogin();
-      }
-    }
-  }
-
-  void _setupAuthListener() {
-    _authSubscription = FirebaseAuth.instance.authStateChanges().listen(
-          (User? user) {
-        if (!_hasNavigated && mounted) {
-          if (user != null) {
-            log('✅ Auth state changed - User authenticated: ${user.uid}');
-            _navigateToHome();
-          } else {
-            log('ℹ️ Auth state changed - No user authenticated');
-            // Only navigate to login if we've waited long enough
-            Future.delayed(const Duration(milliseconds: 3500), () {
-              if (!_hasNavigated && mounted) {
-                _navigateToLogin();
-              }
-            });
-          }
-        }
-      },
-      onError: (error) {
-        log('❌ Auth state listener error: $error');
-        if (!_hasNavigated && mounted) {
-          _navigateToLogin();
-        }
-      },
-    );
-  }
+  // void _setupAuthListener() {
+  //   _authSubscription = FirebaseAuth.instance.authStateChanges().listen(
+  //         (User? user) {
+  //       if (!_hasNavigated && mounted) {
+  //         if (user != null) {
+  //           log('✅ Auth state changed - User authenticated: ${user.uid}');
+  //           // _navigateToHome();
+  //         } else {
+  //           log('ℹ️ Auth state changed - No user authenticated');
+  //           // Only navigate to login if we've waited long enough
+  //           Future.delayed(const Duration(milliseconds: 3500), () {
+  //             if (!_hasNavigated && mounted) {
+  //               // _navigateToLogin();
+  //             }
+  //           });
+  //         }
+  //       }
+  //     },
+  //     onError: (error) {
+  //       log('❌ Auth state listener error: $error');
+  //       if (!_hasNavigated && mounted) {
+  //         _navigateToLogin();
+  //       }
+  //     },
+  //   );
+  // }
 
 
-  Future<void> _performInitialAuthCheck() async {
-    try {
-      // Double-check current user state
-      final currentUser = FirebaseAuth.instance.currentUser;
-
-      if (currentUser != null) {
-        log('✅ Initial check - User authenticated: ${currentUser.uid}');
-        _navigateToHome();
-      } else {
-        log('ℹ️ Initial check - No authenticated user found');
-        _navigateToLogin();
-      }
-    } catch (e) {
-      log('❌ Initial auth check error: $e');
-      _navigateToLogin();
-    }
-  }
-
-  void _navigateToHome() {
-    if (_hasNavigated || !mounted) return;
-    _hasNavigated = true;
-
-    Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => const HomeScreen())
-    );
-  }
-
-  void _navigateToLogin() {
-    if (_hasNavigated || !mounted) return;
-    _hasNavigated = true;
-
-    Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => const LoginScreen())
-    );
-  }
+  // Future<void> _performInitialAuthCheck() async {
+  //   try {
+  //     // Double-check current user state
+  //     final currentUser = FirebaseAuth.instance.currentUser;
+  //
+  //     if (currentUser != null) {
+  //       log('✅ Initial check - User authenticated: ${currentUser.uid}');
+  //       _navigateToHome();
+  //     } else {
+  //       log('ℹ️ Initial check - No authenticated user found');
+  //       _navigateToLogin();
+  //     }
+  //   } catch (e) {
+  //     log('❌ Initial auth check error: $e');
+  //     _navigateToLogin();
+  //   }
+  // }
+  //
+  // void _navigateToHome() {
+  //   if (_hasNavigated || !mounted) return;
+  //   _hasNavigated = true;
+  //
+  //   Navigator.pushReplacement(
+  //       context,
+  //       MaterialPageRoute(builder: (_) => const HomeScreen())
+  //   );
+  // }
+  //
+  // void _navigateToLogin() {
+  //   if (_hasNavigated || !mounted) return;
+  //   _hasNavigated = true;
+  //
+  //   Navigator.pushReplacement(
+  //       context,
+  //       MaterialPageRoute(builder: (_) => const LoginScreen())
+  //   );
+  // }
 
     // Future<void> _checkAuthStateAndNavigate() async {
     //   try {

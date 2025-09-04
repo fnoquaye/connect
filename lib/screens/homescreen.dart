@@ -1,4 +1,6 @@
 
+import 'dart:developer';
+
 import 'package:connect/APIs/apis.dart';
 // import 'package:connect/screens/auth/login_screen.dart';
 import 'package:connect/screens/profile_screen.dart';
@@ -39,6 +41,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
+   log('building HomeScreen');
     return GestureDetector(
       //keyboard hiding on tap
       onTap: () => FocusScope.of(context).unfocus(),

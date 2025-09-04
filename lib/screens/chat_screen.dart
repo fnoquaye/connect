@@ -26,12 +26,43 @@ class _ChatScreenState extends State<ChatScreen> {
   Stream<QuerySnapshot>? _messagesStream;
   Stream<DocumentSnapshot<Map<String, dynamic>>>? _userStatusStream;
 
+  // String _selectedTargetLanguage = 'fr'; // Default to French
+  String _myPreferredLanguage = 'en';
+
+// Simple language options
+  final Map<String, String> _languages = {
+    'en': 'English',
+    'fr': 'French',
+    'es': 'Spanish',
+    'de': 'German',
+    'it': 'Italian',
+    'pt': 'Portuguese',
+    'ar': 'Arabic',
+    'zh': 'Chinese',
+    'ja': 'Japanese',
+    'ko': 'Korean',
+    'hi': 'Hindi',
+    'sw': 'Swahili',
+  };
+
   @override
   void initState() {
     super.initState();
     // Initialize streams once
     _messagesStream = APIS.getAllMessages(widget.user);
     _userStatusStream = APIS.getUserStatus(widget.user.id);
+
+    // Load current user's preferred language
+    _loadMyPreferredLanguage();
+  }
+
+  Future<void> _loadMyPreferredLanguage() async {
+    final preferredLang = await APIS.getUserPreferredLanguage(APIS.user.uid);
+    if (mounted) {
+      setState(() {
+        _myPreferredLanguage = preferredLang;
+      });
+    }
   }
 
   bool _isEmojiPickerVisible = false;
@@ -239,9 +270,10 @@ class _ChatScreenState extends State<ChatScreen> {
       child: Row(
         children: [
           //back button
-          IconButton(onPressed: (){Navigator.pop(context);},
-              icon: const Icon(
-                Icons.arrow_back,)),
+          IconButton(
+              onPressed: (){Navigator.pop(context);},
+              icon: const Icon(Icons.arrow_back,)
+          ),
 
           //user profile picture
           ClipRRect(
@@ -251,41 +283,52 @@ class _ChatScreenState extends State<ChatScreen> {
               height: mq.height * 0.05,
               imageUrl: widget.user.image,
               placeholder: (context, url) => CircularProgressIndicator(),
-              errorWidget: (context, url, error) => CircleAvatar(child: Icon(CupertinoIcons.person)),
+              errorWidget: (context, url, error) => CircleAvatar(
+                  child: Icon(CupertinoIcons.person)),
             ),
           ),
 
           const SizedBox(width: 10),
-          // Name and status with cleaner StreamBuilder
-          StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-            stream: APIS.getUserStatus(widget.user.id),
-            builder: (context, snapshot){
-              // Use the new parseUserStatus method for cleaner code
-              final statusData = APIS.parseUserStatus(snapshot.data, widget.user);
 
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text(
-                    widget.user.name,
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w500,
+          // Name and status with cleaner StreamBuilder
+          Expanded(
+            child: StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+              stream: APIS.getUserStatus(widget.user.id),
+              builder: (context, snapshot){
+                // Use the new parseUserStatus method for cleaner code
+                final statusData = APIS.parseUserStatus(snapshot.data, widget.user);
+
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      widget.user.name,
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w500,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    statusData['statusText'],
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: statusData['isOnline'] ? Colors.green : Colors.grey,
+                    const SizedBox(height: 2),
+                    Text(
+                      statusData['statusText'],
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: statusData['isOnline'] ? Colors.green : Colors.grey,
+                      ),
                     ),
-                  ),
-                ],
-              );
-            },
-          )
+                  ],
+                );
+              },
+            ),
+          ),
+
+          //Language Selector Button
+          IconButton(
+            onPressed: _showMyLanguagePreference,
+            icon: Icon(Icons.translate),
+            tooltip: 'Select Language (${_languages[_myPreferredLanguage]})',
+          ),
         ],
       ),
     );
@@ -326,6 +369,24 @@ class _ChatScreenState extends State<ChatScreen> {
                       });
                     },
                   ),
+
+                  // // Add this to your _chatInput() method after the attach file button:
+                  // IconButton(
+                  //   icon: Icon(Icons.bug_report),
+                  //   onPressed: () async {
+                  //     print('🧪 Testing translation server...');
+                  //     await APIS.testTranslation();
+                  //   },
+                  // ),
+
+                  // Add this temporarily to your _chatInput() method or anywhere in your UI
+                  // ElevatedButton(
+                  //   onPressed: () async {
+                  //     print('Testing server connectivity...');
+                  //     await APIS.testServerConnectivity();
+                  //   },
+                  //   child: Text('Test Server'),
+                  // ),
 
                   // Text input field
                   Expanded(
@@ -390,35 +451,58 @@ class _ChatScreenState extends State<ChatScreen> {
               )
 
                   : const Icon(Icons.send, color: Colors.white),
-              onPressed: _lastTextEmpty || _isSending // 🔥 CHANGED: Use _lastTextEmpty instead of checking text every time
-              // onPressed: _textController.text.trim().isEmpty || _isSending // ✅ Disable when sending
+              onPressed: _lastTextEmpty || _isSending //
                   ? null
                   : () async { // Make async
                 final message = _textController.text.trim();
 
+                // DEBUG: Check language values
+                print('🔍 DEBUG SEND:');
+                print('  - _myPreferredLanguage: "$_myPreferredLanguage"');
+                print('  - widget.user.preferredLanguage: "${widget.user.preferredLanguage}"');
+                print('  - widget.user.preferredLanguage.isEmpty: ${widget.user.preferredLanguage?.isEmpty}');
+
+                // Immediately clear the text field and update state
+                _textController.clear();
+
                 setState(() {
                   _isSending = true; // Show loading
+                  _lastTextEmpty = true; // Reset text state immediately
                 });
 
+                // Cancel any pending debouncer
+                _textChangeDebouncer?.cancel();
+                _lastText = '';
+
                 try {
-                  final success = await APIS.sendMessage(widget.user, message, "fr");
+                  final success = await APIS.sendMessage(widget.user, message)
+                      .timeout( const Duration(seconds: 10),
+                    onTimeout: (){
+                      print('❌ Send message timeout');
+                      return false;
+                    }
+                  );
 
                   if (success) {
-                    _textController.clear();
-                    // 🔥 NEW: Update text state after clearing
-                    _handleTextChange('');
-                    print('Message sent successfully');
+                   if (mounted){
+                     _textController.clear();
+                     // 🔥 NEW: Update text state after clearing
+                     _handleTextChange('');
+                     print('Message sent successfully');
 
-                    // Hide emoji picker after sending
-                    if (_isEmojiPickerVisible) {
-                      setState(() {
-                        _isEmojiPickerVisible = false;
-                      });
-                    }
+                     // Hide emoji picker after sending
+                     if (_isEmojiPickerVisible) {
+                       setState(() {
+                         _isEmojiPickerVisible = false;
+                       });
+                     }
+                   }
                   } else {
                     // Show error to user
+                    if (mounted){ // Check if widget is still mounted (CRASH FIX)
+                      _textController.text = message; // Restore the message
+                      _handleTextChange(message); // Update button state
 
-                    if (mounted){ // 🔥 NEW: Check if widget is still mounted (CRASH FIX)
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(content: Text('Failed to send message')),
                       );
@@ -427,6 +511,20 @@ class _ChatScreenState extends State<ChatScreen> {
                 }  catch (e) {
                   log('Error sending message: $e');
                   if (mounted) { // 🔥 NEW: Check if widget is still mounted (CRASH FIX)
+
+                    if (mounted) {
+                      // Restore the message on error
+                      _textController.text = message;
+                      _handleTextChange(message);
+
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('Error sending message: ${e.toString()}'),
+                          backgroundColor: Colors.red,
+                        ),
+                      );
+                    }
+
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(content: Text('Error sending message')),
                     );
@@ -480,24 +578,112 @@ class _ChatScreenState extends State<ChatScreen> {
     // 🔥 NEW: Update last text immediately to prevent unnecessary calls
     _lastText = value;
 
+    // Update button state immediately for better UX
+    final isEmpty = value.trim().isEmpty;
+    if (isEmpty != _lastTextEmpty) {
+      setState(() {
+        _lastTextEmpty = isEmpty;
+      });
+    }
+
     // 🔥 NEW: Debounce rapid typing to prevent crashes
     _textChangeDebouncer?.cancel();
     _textChangeDebouncer = Timer(const Duration(milliseconds: 150), () {
-      if (!mounted) return;
-      final isEmpty = value.trim().isEmpty;
-      if (isEmpty != _lastTextEmpty && mounted) {
-        setState(() {
-          _lastTextEmpty = isEmpty;
-        });
-      }
     });
-    //
-    // final isEmpty = value.trim().isEmpty;
-    // if (isEmpty != _lastTextEmpty) {
-    //   setState(() {
-    //     _lastTextEmpty = isEmpty;
-    //   });
-    // }
   }
 
+  // UPDATED: Language preference selector (for current user)
+  void _showMyLanguagePreference() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('My Language Preference'),
+        content: Container(
+          width: double.minPositive,
+          child: ListView.builder(
+            shrinkWrap: true,
+            itemCount: _languages.length,
+            itemBuilder: (context, index) {
+              final langCode = _languages.keys.elementAt(index);
+              final langName = _languages[langCode]!;
+
+              return RadioListTile<String>(
+                title: Text(langName),
+                subtitle: Text('I want to receive messages in $langName'),
+                value: langCode,
+                groupValue: _myPreferredLanguage,
+                onChanged: (value) async {
+                  // Update in Firestore
+                  await APIS.updateMyPreferredLanguage(value!);
+
+                  setState(() {
+                    _myPreferredLanguage = value;
+                  });
+
+                  Navigator.pop(context);
+
+                  // Show confirmation
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Language preference updated to $langName')),
+                  );
+                },
+              );
+            },
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text('Cancel'),
+          ),
+        ],
+      ),
+    );
+  }
 }
+
+  // Add this method to show language picker
+  // void _showLanguagePicker() {
+  //   showDialog(
+  //     context: context,
+  //     builder: (context) => AlertDialog(
+  //       title: Text('Select Translation Language'),
+  //       content: Container(
+  //         width: double.minPositive,
+  //         child: ListView.builder(
+  //           shrinkWrap: true,
+  //           itemCount: _languages.length,
+  //           itemBuilder: (context, index) {
+  //             final langCode = _languages.keys.elementAt(index);
+  //             final langName = _languages[langCode]!;
+  //
+  //             return RadioListTile<String>(
+  //               title: Text(langName),
+  //               value: langCode,
+  //               groupValue: _selectedTargetLanguage,
+  //               onChanged: (value) {
+  //                 setState(() {
+  //                   _selectedTargetLanguage = value!;
+  //                 });
+  //                 Navigator.pop(context);
+  //               },
+  //             );
+  //           },
+  //         ),
+  //       ),
+  //       actions: [
+  //         TextButton(
+  //           onPressed: () => Navigator.pop(context),
+  //           child: Text('Cancel'),
+  //         ),
+  //       ],
+  //     ),
+  //   );
+  // }
+//
+// final isEmpty = value.trim().isEmpty;
+// if (isEmpty != _lastTextEmpty) {
+//   setState(() {
+//     _lastTextEmpty = isEmpty;
+//   });
+// }

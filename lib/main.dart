@@ -3,6 +3,7 @@ import 'dart:developer';
 
 import 'package:connect/screens/auth/login_screen.dart';
 import 'package:connect/screens/homescreen.dart';
+import 'package:connect/screens/language_select_screen.dart';
 import 'package:connect/screens/splash_screen.dart';
 import 'package:connect/helper/theme_provider.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -144,6 +145,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
           backgroundColor: Colors.black,
         ),
       ),
+
       home: StreamBuilder<User?>(
           stream: FirebaseAuth.instance.authStateChanges(),
           builder: (context, snapshot){
@@ -151,7 +153,6 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     if (snapshot.connectionState == ConnectionState.waiting) {
     return const SplashScreen();
     }
-
     // If there's an error, show splash screen (which will handle the error)
     if (snapshot.hasError) {
     log('❌ Auth stream error: ${snapshot.error}');
@@ -160,7 +161,39 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     // Check if user is authenticated
     if (snapshot.hasData && snapshot.data != null) {
     log('✅ User is authenticated: ${snapshot.data!.uid}');
-    return const HomeScreen();
+    return
+      // lang screen
+      FutureBuilder<String>(
+      future: APIS.getUserPreferredLanguage(snapshot.data!.uid),
+      builder: (context, langSnapshot) {
+        if (langSnapshot.connectionState == ConnectionState.waiting) {
+          return const Scaffold(
+            body: Center(child: CircularProgressIndicator()),
+          );
+        }
+
+        if (langSnapshot.hasError) {
+          log('❌ Language fetch error: ${langSnapshot.error}');
+          return const SplashScreen(); // Or fallback UI
+        }
+        log('🧠 FutureBuilder triggered');
+        final preferredLang = langSnapshot.data ?? '';
+        log('🧠 preferredLang: "$preferredLang"');
+        final showSelector = preferredLang.isEmpty;
+        log('🧠 showSelector: $showSelector');
+
+        log('🧠 preferredLang: $preferredLang');
+        log('🧠 showSelector: $showSelector');
+
+        if (showSelector) {
+          log('🌐 Showing Language Selector Screen');
+          return LanguageSelectScreen();
+        } else {
+          log('🏠 Routing to HomeScreen');
+          return const HomeScreen();
+        }
+      },
+    );
     } else {
     log('ℹ️ User is not authenticated');
     return const LoginScreen();
@@ -176,27 +209,3 @@ Future<void> _initializeFirebase() async{
     options: DefaultFirebaseOptions.currentPlatform,
   );
 }
-
-// return MaterialApp(
-//   title: 'Connect',
-//   themeMode: themeProvider.themeMode,
-//   theme: ThemeData.light(),
-//     darkTheme: ThemeData.dark(),
-//     appBarTheme: const AppBarTheme(
-//       shape:RoundedRectangleBorder(
-//         borderRadius: BorderRadius.vertical(
-//           bottom: Radius.circular(20),
-//         ),
-//       ) ,
-//       centerTitle: true,
-//       elevation: 1,
-//      iconTheme: IconThemeData(color: Colors.black),
-//      titleTextStyle: TextStyle(
-//        color: Colors.black,
-//        fontSize: 28,
-//        fontWeight: FontWeight.w400,
-//      ),
-//       backgroundColor: Colors.blue,
-//     ),
-//   home: const SplashScreen(),
-// );

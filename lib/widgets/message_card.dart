@@ -26,7 +26,7 @@ class _MessageCardState extends State<MessageCard> {
   }
 
   Future<void> _loadDisplayText() async {
-    final text = await APIS.getDisplayText(widget.message, "fr");
+    final text = await APIS.getDisplayText(widget.message);
     if (mounted) {
       setState(() {
         displayText = text;
@@ -71,7 +71,7 @@ Widget _greyMessage() {
 
               // actual text
               child: Text(
-                  widget.message.msg,
+                displayText ?? "...",
                 style: TextStyle(
                   fontSize: 16,
                 ),
@@ -119,7 +119,9 @@ Widget _blueMessage(){
                 style: TextStyle(
                     fontSize: 13
                 ),
-  ) ]),
+              )
+            ]
+        ),
               // message content
               Flexible(
                 child: Container(
@@ -143,7 +145,8 @@ Widget _blueMessage(){
 
                   // actual text
                   child: Text(
-                    widget.message.msg,
+                    displayText ?? "...",
+                    // widget.message.originalMsg,
                     style: TextStyle(
                       fontSize: 16,
                     ),

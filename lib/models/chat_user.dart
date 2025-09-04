@@ -8,6 +8,7 @@ class ChatUser {
   final DateTime? createdAt;
   late final DateTime? lastActive;
   late final bool isOnline;
+  late final String? preferredLanguage;
   final String email;
   final String? pushToken;
 
@@ -19,6 +20,7 @@ class ChatUser {
     this.createdAt,
     this.lastActive,
     required this.isOnline,
+    this.preferredLanguage,
     required this.email,
     this.pushToken,
   });
@@ -29,15 +31,16 @@ class ChatUser {
       about: json['about'] ?? '',
       name: json['name'] ?? '',
       id: json['id'] ?? '',
-      createdAt: json['created_at'] != null
-          ? (json['created_at'] as Timestamp).toDate()
+      createdAt: json['createdAt'] != null
+          ? (json['createdAt'] as Timestamp).toDate()
           : null,
-      lastActive: json['last_active'] != null
-          ? (json['last_active'] as Timestamp).toDate()
+      lastActive: json['lastActive'] != null
+          ? (json['lastActive'] as Timestamp).toDate()
           : null,
-      isOnline: json['is_online'] ?? false,
+      isOnline: json['isOnline'] ?? false,
+      preferredLanguage : json['preferredLanguage']?.toString(),
       email: json['email'] ?? '',
-      pushToken: json['push_token'] ?? '',
+      pushToken: json['pushToken'] ?? '',
     );
   }
 
@@ -47,11 +50,12 @@ class ChatUser {
       'about': about,
       'name': name,
       'id' : id,
-      'created_at': createdAt,
-      'last_active': lastActive,
-      'is_online': isOnline,
+      'createdAt': createdAt,
+      'lastActive': lastActive,
+      'isOnline': isOnline,
+      'preferredLanguage' : preferredLanguage,
       'email': email,
-      'push_token': pushToken,
+      'pushToken': pushToken,
     };
   }
 }

@@ -18,9 +18,14 @@ class Message {
  late final String msg;
  late final String originalMsg;
  late final String read;
- late final Type type;
+ late final MessageType type;
  late final String fromID;
  late final String sent;
+ late final String senderLanguage;
+ late final String recipientLanguage;
+ late final bool wasTranslated;
+ late final bool translationSucceeded;
+
 
   Message({
     required this.toID,
@@ -30,6 +35,10 @@ class Message {
     required this.type,
     required this.fromID,
     required this.sent,
+    required this.senderLanguage,
+    required this.recipientLanguage,
+    required this.wasTranslated,
+    required this.translationSucceeded,
   });
 
    Message.fromJson(Map<String, dynamic> json) {
@@ -37,10 +46,14 @@ class Message {
     msg = json['msg'].toString();
     originalMsg = json['originalMsg'].toString();
     read = json['read'].toString();
-    type = json['type'].toString() == Type.image.name ? Type.image : Type.text ;
+    type = json['type'].toString() == MessageType.image.name ? MessageType.image : MessageType.text ;
     fromID = json['fromID'].toString();
     sent = json['sent'].toString();
-  }
+    senderLanguage = json['senderLanguage']?.toString() ?? 'en';
+    recipientLanguage = json['recipientLanguage']?.toString() ?? 'en';
+    wasTranslated = json['wasTranslated'] ?? false;
+    translationSucceeded = json['translationSucceeded'] ?? false;
+   }
 
 
     Map<String, dynamic> toJson(){
@@ -52,13 +65,37 @@ class Message {
      data['type'] = type.name;
      data['fromID'] = fromID;
      data['sent'] = sent;
+     // 🆕 Translation metadata
+     data['senderLanguage'] = senderLanguage;
+     data['recipientLanguage'] = recipientLanguage;
+     data['wasTranslated'] = wasTranslated;
+     data['translationSucceeded'] = translationSucceeded;
      return data;
     }
+
+ Message copyWith({
+   String? msg,
+   String? read,
+   bool? wasTranslated,
+   bool? translationSucceeded,
+ }) {
+   return Message(
+     toID: toID,
+     msg: msg ?? this.msg,
+     originalMsg: originalMsg,
+     read: read ?? this.read,
+     type: type,
+     fromID: fromID,
+     sent: sent,
+     senderLanguage: senderLanguage,
+     recipientLanguage: recipientLanguage,
+     wasTranslated: wasTranslated ?? this.wasTranslated,
+     translationSucceeded: translationSucceeded ?? this.translationSucceeded,
+   );
+ }
 }
 
-enum Type { text, image }
-
-
+enum MessageType { text, image }
 
 // factory Message.fromJson(Map<String, dynamic> json) {
 //   return Message(

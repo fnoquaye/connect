@@ -26,7 +26,7 @@ class APIS{
   // App lifecycle tracking
   static bool _isAppInForeground = true;
 
-  // 🔥 ADD THIS NEAR THE TOP (around line 26):
+  //
   static String? _currentDeviceId;
   static bool _isInitialized = false;
 
@@ -50,6 +50,11 @@ class APIS{
     // timeout to prevent splashscreen stuck
     try{
       log('📱 Getting self info...');
+      final currentUser = FirebaseAuth.instance.currentUser;
+      if (currentUser == null) {
+        log('⚠️ No user found, skipping getSelfInfo');
+        return;
+      }
       await firestore
           .collection('users')
           .doc(user.uid)
@@ -93,10 +98,11 @@ class APIS{
         id: user.uid,
         name: user.displayName.toString(),
         email: user.email.toString(),
-        about: "Hey, Let's Connect",
+        about: "Hey, Let\'s Connect",
         image: user.photoURL.toString(),
         createdAt: DateTime.now(),
         isOnline: false,
+        // preferredLanguage: '',
         lastActive: DateTime.now(),
         pushToken: ''
     );
@@ -141,8 +147,6 @@ class APIS{
         log('⚠️ Presence tracking already active for this device');
         return;
       }
-
-
       // Set user online when app starts
       await updateUserPresence(true);
       _startPresenceTracking();
@@ -154,18 +158,14 @@ class APIS{
 
   // **IMPROVED: Update user online/offline status**
   static Future<void> updateUserPresence(bool isOnline) async {
-
     // 🔥 NEW: Prevent multiple simultaneous updates
     if (_isUpdatingPresence) {
       log('Presence update already in progress, skipping');
       return;
     }
-
     try {
-
       // 🔥 NEW: Set flag to prevent concurrent updates
       _isUpdatingPresence = true;
-
       // Check if user is still authenticated
       if (auth.currentUser == null) {
         log('User not authenticated, skipping presence update');
@@ -173,19 +173,14 @@ class APIS{
       }
 
       final now = DateTime.now();
-
       // 🔥 NEW: Add device ID to update to prevent conflicts
       final updateData = {
         'isOnline': isOnline,
         'lastActive': now,
         'deviceId': _currentDeviceId ?? 'unknown', // Track which device is updating
+        'presenceUpdated': FieldValue.serverTimestamp(),
       };
-
       await firestore.collection('users').doc(user.uid).update(updateData);
-      //     {
-      //   'isOnline': isOnline,
-      //   'lastActive': now,
-      // }
       try{
         // Update local user object if it exists
         me.isOnline = isOnline;
@@ -236,6 +231,7 @@ class APIS{
     log('Started periodic presence tracking');
   }
 
+
   static Future<void> cleanupPreviousSession() async {
     try {
       // 🔥 NEW: Clear any hanging listeners from previous sessions
@@ -255,6 +251,7 @@ class APIS{
       // App came to foreground - user is online
       log('🟢 Setting user online...');
       await updateUserPresence(true);
+      await Future.delayed(const Duration(milliseconds: 500));
       _startPresenceTracking();
     } else {
       // App went to background - user is offline
@@ -328,11 +325,6 @@ class APIS{
         } catch (e) {
           log('⚠️ Error parsing lastActive: $e');
         }
-        // if (data['lastActive'] is Timestamp) {
-        //   lastActive = (data['lastActive'] as Timestamp).toDate();
-        // } else if (data['lastActive'] is DateTime) {
-        //   lastActive = data['lastActive'];
-        // }
       }
     }
     return {
@@ -356,7 +348,7 @@ class APIS{
     } else if (wasRecentlyActive(lastActive)) {
       final difference = DateTime.now().difference(lastActive);
       if (difference.inSeconds < 30){
-        return 'Active now';
+        return 'Active just now';
       } else if (difference.inMinutes < 1) {
         return 'Active ${difference.inSeconds}s ago';
       } else {
@@ -417,82 +409,70 @@ class APIS{
     await initializePresence();
   }
 
+
+
+
+
+
   ///************* CHAT SCREEN RELATED APIs **************
   // chats (collections) --> conversation_id(doc) --> messages (collection) --> message (doc)
+
+
+
 
   // useful for getting conversation id
   static String getConversationID(String id) => user.uid.hashCode <= id.hashCode
       ? '${user.uid}_ $id'
       : '${id}_ ${user.uid}';
 
-  //to get all messages of a specific conversation
-  static Stream<QuerySnapshot<Map<String, dynamic>>> getAllMessages(
-      ChatUser user){
-    return firestore
-        .collection('chats/${getConversationID(user.id)}/messages/')
-        .orderBy('sent', descending: false)
-        .snapshots();
+  static Future<void> updateTypingStatus(String chatId, bool isTyping) async {
+    await firestore
+        .collection('chats/$chatId/typing')
+        .doc(user.uid)
+        .set({'isTyping': isTyping});
   }
 
-  // translate texts using my locally hosted server
-  static Future<String> translateText(String text, String targetLang) async {
-
-    // List of URLs to try
-    final urls = [
-      'http://127.0.0.1:8000/translate',
-      'http://10.0.2.2:8000/translate',    // Android emulator
-      'http://localhost:8000/translate',    // iOS/general
-      'http://10.74.79.61:8000/translate', // Your machine's IP
-    ];
-    for (String url in urls) {
-      print('🔄 Trying URL: $url');
-    try {
-      final response = await http.post(
-        Uri.parse(url),
-        // Uri.parse('http://127.0.0.1:8000/translate'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'text': text,
-          // 'source_lang': 'auto', // automatic detection
-          'target_lang': targetLang,
-        }),
-      ).timeout(const Duration(seconds: 5));
-
-      print('📡 Response status: ${response.statusCode}');
-      print('📡 Translation response status: ${response.statusCode}'); // Debug
-      print('📡 Translation response body: ${response.body}'); // Debug
-
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        final translatedText = data['translated_text'] ?? text;
-        print('✅ Translation successful: "$translatedText"'); // Debug
-        return translatedText;
-        // return data['translated_text'];
-      } else {
-        print('Translation failed with status: ${response.statusCode}');
-      }
-    } catch (e) {
-     print('Failed with $url: $e');
-     continue;
-    }
-  }
-    print('❌ All URLs failed, using original text');
-    return text;
-  }
 
   //for sending messages
-  static Future<bool> sendMessage(ChatUser chatUser, String msg, String targetLang) async {
+  static Future<bool> sendMessage(ChatUser chatUser, String msg) async {
     try{
       if (msg.trim().isEmpty)
         return false;
 
-      print('📤 Sending message: "$msg" to ${chatUser.name}'); // Debug
+      print('📤 SEND MESSAGE DEBUG:');
+      print('  - Original message: "$msg"');
 
-      // // Translate text first
+      // Add fallback for preferred language
 
-      // final translatedMsg = await translateText(msg, targetLang);
-      // print('📝 Original: "$msg" | Translated: "$translatedMsg"'); // Debug
+      // Get FRESH recipient language preference
+      final freshRecipientLang = await getUserPreferredLanguage(chatUser.id);
+      print('  - Fresh recipient language: "$freshRecipientLang"');
 
+      // Get sender's language preference
+      final senderLang = await getUserPreferredLanguage(user.uid);
+      print('  - Sender language: "$senderLang"');
+
+      // Determine if translation is needed
+      final needsTranslation = senderLang != freshRecipientLang;
+      print('  - Translation needed: $needsTranslation');
+
+      String translatedMsg = msg;
+      bool translationSucceeded = true;
+
+      if (needsTranslation) {
+        // Attempt translation
+        final translationResult = await translateTextWithFallback(
+          text: msg,
+          sourceLang: senderLang,
+          targetLang: freshRecipientLang,
+        );
+
+        translatedMsg = translationResult['text'];
+        translationSucceeded = translationResult['success'];
+
+        print('  - Translation result: "$translatedMsg"');
+        print('  - Translation succeeded: $translationSucceeded');
+      }
 
       // message sending time
       final time = DateTime.now().millisecondsSinceEpoch.toString();
@@ -500,16 +480,26 @@ class APIS{
       // message to send
       final Message message = Message(
           toID: chatUser.id,
-          msg: msg,
+          msg: translatedMsg,
           originalMsg: msg,
           read: '',
-          type: Type.text,
+          type: MessageType.text,
           fromID: user.uid,
-          sent: time);
+          sent: time,
+          senderLanguage: senderLang,            // NEW: Track sender language
+          recipientLanguage: freshRecipientLang, // NEW: Track recipient language
+          wasTranslated: needsTranslation,       // NEW: Track if translated
+          translationSucceeded: translationSucceeded, // NEW: Track success
+      );
 
+
+      print('💾 SAVING MESSAGE:');
       final ref = firestore
           .collection('chats/${getConversationID(chatUser.id)}/messages/');
-      await ref.doc(time).set(message.toJson());
+      await ref.doc(time).set(message.toJson())
+          .timeout(const Duration(seconds: 10),
+          onTimeout: ()=> throw TimeoutException('FireStore write timeout'));
+      print('✅ Message saved to Firestore successfully');
       return true; // ✅ Return success status
     } catch (e) {
       print('Error sending message: $e'); // ✅ Add error handling
@@ -517,17 +507,193 @@ class APIS{
     }
   }
 
-  // Get display text (translate if needed)
-  static Future<String> getDisplayText(Message message, String targetLang) async {
-    // If it's your own message, show original
-    if (message.fromID == user.uid) {
-      return message.msg;
+  // translate text with fallback
+  // This Part Wraps Translate Text Method...
+  static Future<Map<String, dynamic>> translateTextWithFallback({required String text, required String sourceLang, required String targetLang,}) async {
+    try {
+      final translatedText = await translateText(text, targetLang);
+      final success = translatedText != text;
+      return {
+        'text': translatedText,
+        'success': success,
+      };
+    } catch (e) {
+      print('❌ Translation failed: $e');
+      return {
+        'text': text,
+        'success': false,
+      };
     }
-
-    // If it's from someone else, translate it
-    return await translateText(message.msg, targetLang);
   }
 
+  // translate texts using my locally hosted server
+  static Future<String> translateText(String text, String targetLang) async {
+    if (text.trim().isEmpty) {
+      print('⏭️ Skipping translation - empty text');
+      return text;
+    }
+    print('🌐 TRANSLATION DEBUG:');
+    print('  - Input text: "$text"');
+    print('  - Target language: "$targetLang"');
+
+    // List of URLs to try
+    final urls = [
+      'http://192.168.137.61:8000/translate', // Your machine's IP
+      'http://10.0.2.2:8000/translate',    // Android emulator
+      'http://127.0.0.1:8000/translate',    //local loopback
+      'http://localhost:8000/translate',    // iOS/general
+    ];
+
+    for (String url in urls) {
+      try {
+        print('🔄 Trying URL: $url');
+
+        final requestBody = {
+          'text': text,
+          'source_lang': 'auto', // automatic detection
+          'target_lang': targetLang,
+        };
+
+        print('📡 Request body: $requestBody');
+
+        final response = await http.post(
+          Uri.parse(url),
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+          },
+          body: jsonEncode(requestBody),
+        ).timeout(const Duration(seconds: 8));
+
+        print('📡 Response status: ${response.statusCode}');
+        // print('📡 Translation response status: ${response.statusCode}'); // Debug
+        print('📡 Translation response body: ${response.body}'); // Debug
+
+        if (response.statusCode == 200) {
+          try {
+
+            final data = jsonDecode(response.body);
+            print('📊 Parsed response data: $data');
+
+            // Check what fields are available
+            print('📋 Available fields: ${data.keys.toList()}');
+
+            final translatedText = data['translated_text'] ??
+                data['translation'] ??
+                data['result'] ??
+                text;
+
+            print('✅ Translation result:');
+            print('  - Original: "$text"');
+            print('  - Translated: "$translatedText"');
+            print('  - Changed: ${translatedText != text}');
+            return translatedText;
+          } catch (e){
+            print('❌ Error parsing response JSON: $e');
+            print('📄 Raw response: ${response.body}');
+            continue;
+          }
+        } else {
+
+          print('❌ Server error: ${response.statusCode}');
+          print('📄 Error response: ${response.body}');
+          continue;
+        }
+      } catch (e) {
+        print('Failed with $url: $e');
+        continue;
+      }
+    }
+    print('❌ All URLs failed, using original text');
+    return text;
+  }
+
+  // Get display text (translate if needed)
+  static Future<String> getDisplayText(Message message) async {
+    final viewerLang = await getUserPreferredLanguage(user.uid);
+    // If it's your own message, show original
+    if (message.fromID == user.uid) {
+      return message.originalMsg;
+    }
+    if (message.recipientLanguage == viewerLang &&
+        message.wasTranslated &&
+        message.translationSucceeded){
+      return message.msg;
+    }
+    // Re-translate if viewer's language is different
+    final retranslated = await translateTextWithFallback(
+      text: message.originalMsg,
+      sourceLang: message.senderLanguage,
+      targetLang: viewerLang,
+    );
+
+    return retranslated['text'];
+  }
+
+  // get user's preferred language
+  static Future<String> getUserPreferredLanguage(String userId) async {
+    log('📥 Fetching preferred language for user: $userId');
+    try {
+      final doc = await firestore.collection('users').doc(userId).get();
+      if (doc.exists && doc.data() != null) {
+        final lang = doc.data()!['preferredLanguage']?.toString().trim() ?? '';
+        await Future.delayed(Duration(seconds: 1));
+        log('🌐 preferredLanguage field: "$lang"');
+        return lang;
+        // return doc.data()!['preferredLanguage']?.toString() ?? '';
+      }
+    } catch (e) {
+      print('Error getting user preferred language: $e');
+    }
+    return ''; // Default null
+  }
+
+  // update current user's preferred language
+  static Future<void> updateMyPreferredLanguage(String langCode) async {
+    try {
+      final userDoc = firestore.collection('users').doc(user.uid);
+      final snapshot = await userDoc.get();
+
+      if (!snapshot.exists) {
+        print('⚠️ User document not found. Creating...');
+        await userDoc.set({
+          'preferredLanguage': langCode,
+          'createdAt': DateTime.now(),
+          'id': user.uid,
+          'name': user.displayName ?? '',
+          'email': user.email ?? '',
+          'image': user.photoURL ?? '',
+          'about': 'Hey, Let\'s Connect',
+          'isOnline': false,
+          'pushToken': '',
+          'lastActive': DateTime.now(),
+        });
+        print('✅ User document created with preferredLanguage: $langCode');
+      } else {
+        await userDoc.update({'preferredLanguage': langCode});
+        print('✅ Firestore updated with preferredLanguage: $langCode');
+      }
+
+      // await firestore.collection('users').doc(user.uid).update({
+      //   'preferredLanguage': langCode,
+      // });
+
+      print('✅ Firestore updated with preferredLanguage: $langCode');
+      // Update local user object
+      me.preferredLanguage = langCode;
+      print('Updated preferred language to: $langCode');
+    } catch (e) {
+      print('Error updating preferred language: $e');
+    }
+  }
+
+  //to get all messages of a specific conversation
+  static Stream<QuerySnapshot<Map<String, dynamic>>> getAllMessages(ChatUser user){
+    return firestore
+        .collection('chats/${getConversationID(user.id)}/messages/')
+        .orderBy('sent', descending: false)
+        .snapshots();
+  }
 
   // update read status of message
   static Future<void> updateMessageReadStatus(Message message) async {
@@ -543,22 +709,13 @@ class APIS{
       log('Error updating message read status: $e');
     }
   }
+
   // get only last message of a specific chat
-  static Stream <QuerySnapshot<Map<String, dynamic>>> getLastMessage(
-      ChatUser user){
+  static Stream <QuerySnapshot<Map<String, dynamic>>> getLastMessage(ChatUser user){
     return firestore
         .collection('chats/${getConversationID(user.id)}/messages/')
         .orderBy('sent', descending: true)
         .limit(1)
-        .snapshots();
-  }
-
-  // Get only unread messages
-  static Stream<QuerySnapshot<Map<String, dynamic>>> getUnreadMessages(ChatUser user) {
-    return firestore
-        .collection('chats/${getConversationID(user.id)}/messages/')
-        .where('toID', isEqualTo: APIS.user.uid)  // Messages TO current user
-        .where('read', isEqualTo: '')             // Only unread
         .snapshots();
   }
 
@@ -568,15 +725,6 @@ class APIS{
         .collection('chats/${getConversationID(user.id)}/messages/')
         .where('toID', isEqualTo: APIS.user.uid)  // Messages sent TO current user
         .where('read', isEqualTo: '')             // Only unread messages
-        .snapshots();
-  }
-
-  // **ALTERNATIVE: Get recent messages (last 50) for better performance**
-  static Stream<QuerySnapshot<Map<String, dynamic>>> getRecentMessages(ChatUser user) {
-    return firestore
-        .collection('chats/${getConversationID(user.id)}/messages/')
-        .orderBy('sent', descending: true)
-        .limit(50)  // Get last 50 messages
         .snapshots();
   }
 }

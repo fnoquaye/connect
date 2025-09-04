@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:connect/APIs/apis.dart';
 import 'package:connect/helper/dialogs.dart';
+import 'package:connect/screens/language_select_screen.dart';
 // import 'package:connect/screens/homescreen.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
@@ -32,8 +33,9 @@ class _LoginScreenState extends State<LoginScreen> {
     });
   }
 
-  _handleGoogleButtonClick() async {
 
+
+  _handleGoogleButtonClick() async {
     // Prevent multiple simultaneous sign-in attempts
     if (_isSigningIn) return;
 
@@ -41,124 +43,170 @@ class _LoginScreenState extends State<LoginScreen> {
       _isSigningIn = true;
     });
 
-    try{
-
+    try {
       //show progress bar
       Dialogs.showProgressBar(context);
 
       final user = await _signInWithGoogle();
 
       //hide progress bar
-      if (mounted){
         Navigator.pop(context);
-      }
-
-      // Small delay to ensure dialog is fully dismissed
-      await Future.delayed( const Duration(milliseconds: 300));
 
       // _signInWithGoogle().then((user) async {
-        if (user != null) {
-          print('\nUser: ${user.user}');
-          print('\nUserAdditionalInfo: ${user.additionalUserInfo}');
+      if (user != null) {
+        print('\nUser: ${user.user}');
+        print('\nUserAdditionalInfo: ${user.additionalUserInfo}');
+        // Try direct ScaffoldMessenger instead of Dialogs.showSnackbar
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Sign In Successful!'),
+              backgroundColor: Colors.blue,
+              duration: Duration(seconds: 2),
+            ),
+          );
+          // Give time for the success message to show
+          await Future.delayed(const Duration(seconds: 2));
+        }
+          // Dialogs.showSnackbar(context, 'Sign In Successful');
+          // Give time for the success message to show
+          // await Future.delayed(const Duration(milliseconds: 1200));
 
-          if (mounted) {
-            Dialogs.showSnackbar(context, 'Sign In Successful');
-          }
+        bool userExists = false;
 
-          // Add retry mech
-          bool userExists = false;
-          int retryCount = 0;
-          const maxRetries = 3;
+        // int retryCount = 0;
+        // const maxRetries = 3;
+        //
+        // while (retryCount < maxRetries) {
 
-          while (retryCount < maxRetries) {
-            try {
-              userExists = await APIS.userExists();
-              break; // Success, exit retry loop
-            } catch (e) {
-              retryCount++;
-              print('Retry $retryCount for userExists: $e');
-              if (retryCount < maxRetries) {
-                await Future.delayed(Duration(milliseconds: 500 * retryCount));
-              }
-            }
-          }
+        try {
+          userExists = await _checkUserExistsWithRetry();
+          print('✅ New user created - StreamBuilder will handle navigation');
+        } catch (e) {
+          print('Failed to check user existence after all retries: $e');
+          userExists = false;
+        }
 
-          if (userExists) {
-            print('✅ User exists - StreamBuilder will handle navigation');
-            // if (mounted) {
-            //   Navigator.pushReplacement(
-            //       context,
-            //       MaterialPageRoute(builder: (_) => const HomeScreen()));
-            // }
-          } else {
-            // Retry mechanism for user creation
-            retryCount = 0;
-            while (retryCount < maxRetries) {
-              try {
-                await APIS.createUser();
-                break; // Success, exit retry loop
-              } catch (e) {
-                retryCount++;
-                print('Retry $retryCount for createUser: $e');
-                if (retryCount < maxRetries) {
-                  await Future.delayed(
-                      Duration(milliseconds: 500 * retryCount));
-                } else {
-                  throw e; // Re-throw if all retries failed
-                }
-              }
-            }
 
+
+        if (!userExists) {
+          try {
+            await _createUserWithRetry();
             print('✅ New user created - StreamBuilder will handle navigation');
-            // if (mounted) {
-            //   Navigator.pushReplacement(
-            //       context,
-            //       MaterialPageRoute(builder: (_) => const HomeScreen()));
-            // }
+          } catch (e) {
+            print('Failed to create user after all retries: $e');
+            if (mounted) {
+              // Clear any existing snack bars before showing error
+              ScaffoldMessenger.of(context).clearSnackBars();
+              await Future.delayed(const Duration(milliseconds: 100));
+              Dialogs.showSnackbar(context,
+                  'Account setup incomplete. Please try signing in again.');
+            }
+            return; // Exit early if we can't create the user
           }
         } else {
-          // Handle the case when sign-in fails
-          if (mounted) {
-            Dialogs.showSnackbar(context, 'Sign In Failed. Please try again.');
-          }
-        }//   if ((await APIS.userExists())) {
-        //
-        //   } else {
-        //     await APIS.createUser();
-        //
-        //   }
-        // } else {
-        //   // Handle the case when sign-in fails
-        //   Dialogs.showSnackbar(context, 'Sign In Failed. Please try again.');
+          print('✅ User exists - StreamBuilder will handle navigation');
+        }
+      } else {
+        // Handle the case when sign-in fails or was cancelled
+        if (mounted) {
+          ScaffoldMessenger.of(context).clearSnackBars();
+          await Future.delayed(const Duration(milliseconds: 100));
+          Dialogs.showSnackbar(
+              context, 'Sign In was cancelled or failed. Please try again.');
+        }
+      }
     } catch (e) {
       print('Error in _handleGoogleButtonClick: $e');
 
-      if (mounted){
+      if (mounted) {
         // Make sure to pop progress dialog if it's still showing
         try {
-          Navigator.pop(context);
+          while(Navigator.canPop(context)){
+            Navigator.pop(context);
+            // Navigator.of(context, rootNavigator: true).popUntil((route) =>
+            // route.isFirst);
+          }
         } catch (popError) {
-          print('Error popping dialog: $popError');
-      }
-      // Navigator.pop(context); // Hide progress bar on error
-      Dialogs.showSnackbar(context, 'Sign In Failed. Please try again.');
-      // print('Error in _handleGoogleButtonClick: $e');
+          print('Error managing dialogs: $popError');
+        }
 
-       }
-    } finally {
+        // Clear any existing snack bars before showing error
+        ScaffoldMessenger.of(context).clearSnackBars();
+        await Future.delayed(const Duration(milliseconds: 100));
+
+
+        // Show appropriate error message
+        String errorMessage = 'Sign In Failed. Please try again.';
+        if (e.toString().toLowerCase().contains('network')) {
+          errorMessage = 'Network error. Please check your connection.';
+        }
+        Dialogs.showSnackbar(context, errorMessage);
+      }
+    }
+    finally {
       if (mounted) {
         setState(() {
           _isSigningIn = false;
         });
       }
-     }
     }
+  }
+
+
+  // Helper method for checking user existence with retry
+  Future<bool> _checkUserExistsWithRetry() async {
+    const maxRetries = 3;
+    int retryCount = 0;
+
+    while (retryCount < maxRetries) {
+      try {
+        return await APIS.userExists();
+      } catch (e) {
+        retryCount++;
+        print('Retry $retryCount for userExists: $e');
+        if (retryCount < maxRetries) {
+          await Future.delayed(Duration(milliseconds: 500 * retryCount));
+        } else {
+          rethrow; // Rethrow on final attempt
+        }
+      }
+    }
+
+    return false; // This shouldn't be reached
+  }
+
+  // Helper method for creating user with retry
+  Future<void> _createUserWithRetry() async {
+    const maxRetries = 3;
+    int retryCount = 0;
+
+    while (retryCount < maxRetries) {
+      try {
+        await APIS.createUser();
+        return; // Success, exit
+      } catch (e) {
+        retryCount++;
+        print('Retry $retryCount for createUser: $e');
+        if (retryCount < maxRetries) {
+          await Future.delayed(Duration(milliseconds: 500 * retryCount));
+        } else {
+          rethrow; // Rethrow on final attempt
+        }
+      }
+    }
+  }
 
 
 
   Future<UserCredential?> _signInWithGoogle() async {
     try {
-      await InternetAddress.lookup('google.com');
+
+      await InternetAddress.lookup('google.com')
+          .timeout(const Duration(seconds: 10),
+          onTimeout: () =>
+          throw Exception('Network timeout - please check your connection')
+      );
 
       // Clear any existing sign-in state
       await GoogleSignIn().signOut();
@@ -167,7 +215,12 @@ class _LoginScreenState extends State<LoginScreen> {
       await Future.delayed(const Duration(milliseconds: 100));
 
       // Trigger the authentication flow
-      final GoogleSignInAccount? googleUser = await GoogleSignIn().signIn();
+      final GoogleSignInAccount? googleUser = await GoogleSignIn()
+          .signIn()
+          .timeout(const Duration(seconds: 30),
+          onTimeout: () =>
+          throw Exception('Sign-in timeout - please try again')
+      );
 
       if (googleUser == null) {
         // User cancelled the sign-in
@@ -176,7 +229,11 @@ class _LoginScreenState extends State<LoginScreen> {
 
       // Obtain the auth details from the request
       final GoogleSignInAuthentication? googleAuth = await googleUser
-          .authentication;
+          .authentication
+          .timeout(const Duration(seconds: 15),
+          onTimeout: () =>
+          throw Exception('Authentication Timeout')
+      );
 
       if (googleAuth?.accessToken == null || googleAuth?.idToken == null) {
         throw Exception('Failed to get authentication tokens');
@@ -190,10 +247,12 @@ class _LoginScreenState extends State<LoginScreen> {
 
       // Once signed in, return the UserCredential
       final userCredential = await FirebaseAuth.instance.signInWithCredential(
-          credential);
+          credential) .timeout(
+          const Duration(seconds: 20), // Longer timeout for slow networks
+          onTimeout: () => throw Exception('Firebase sign-in timeout'));
 
       // Wait a bit for Firebase to fully process the sign-in
-      await Future.delayed(const Duration(milliseconds: 500));
+      await Future.delayed(const Duration(milliseconds: 1000));
 
       return userCredential;
       // Once signed in, return the UserCredential
@@ -201,16 +260,17 @@ class _LoginScreenState extends State<LoginScreen> {
     } catch (e) {
       print('\n_signInWithGoogle: $e}');
 
+
       if (mounted) {
-        String errorMessage = 'Something went wrong. Please try again.';
+        // String errorMessage = 'Something went wrong. Please try again.';
+        //
+        // if (e.toString().contains('network')) {
+        //   errorMessage = 'Network error. Check your connection.';
+        // } else if (e.toString().contains('cancelled')) {
+        //   errorMessage = 'Sign in was cancelled.';
+        // }
 
-        if (e.toString().contains('network')) {
-          errorMessage = 'Network error. Check your connection.';
-        } else if (e.toString().contains('cancelled')) {
-          errorMessage = 'Sign in was cancelled.';
-        }
-
-        Dialogs.showSnackbar(context, errorMessage);
+        Dialogs.showSnackbar(context, 'Check Connection');
       }
       return null;
     }
