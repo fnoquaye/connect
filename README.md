@@ -1,16 +1,24 @@
-# connect
+CONNECT!
 
-Reworked Chat App for final year project
 
-## Getting Started
 
-This project is a starting point for a Flutter application.
+Reworked Chat App that supports translation for multiple languages for final year project
 
-A few resources to get you started if this is your first Flutter project:
+Be Good dear Project haha.
 
-- [Lab: Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+
+
+
+
+
+
+## 📌 Ownership & Collaboration Guidelines
+
+This project was created by Festus Nii Ofoli Quaye as part of a final year academic assessment. All architectural, design, and implementation decisions were made solely by the author(Me).
+
+Collaborators may contribute documentation or testing support via forks and pull requests. No changes to core logic or architecture will be accepted without explicit approval.
+
+Unauthorized claims of authorship or redistribution are strictly prohibited.
+
+
