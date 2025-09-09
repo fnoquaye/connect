@@ -122,6 +122,166 @@ class APIS{
         .snapshots();
   }
 
+  // Get only my added connections
+  static Stream<QuerySnapshot<Map<String, dynamic>>> getMyConnections() {
+    return firestore
+        .collection('users')
+        .doc(user.uid)
+        .collection('connections')
+        .snapshots();
+  }
+
+  // Send a connection request
+  static Future<void> sendConnectionRequest(ChatUser otherUser) async {
+    final myId = user.uid;
+    final otherId = otherUser.id;
+
+    final batch = firestore.batch();
+
+    // request doc under me -> marked "sent"
+    final myRequestRef = firestore
+        .collection('users')
+        .doc(myId)
+        .collection('connection_requests')
+        .doc(otherId);
+
+    batch.set(myRequestRef, {
+      'id': otherUser.id,
+      'name': otherUser.name,
+      'email': otherUser.email,
+      'status': 'sent',
+      'timestamp': FieldValue.serverTimestamp(),
+    });
+
+    // request doc under them -> marked "pending"
+    final otherRequestRef = firestore
+        .collection('users')
+        .doc(otherId)
+        .collection('connection_requests')
+        .doc(myId);
+
+    batch.set(otherRequestRef, {
+      'id': me.id,
+      'name': me.name,
+      'email': me.email,
+      'status': 'pending',
+      'timestamp': FieldValue.serverTimestamp(),
+    });
+
+    await batch.commit();
+  }
+
+// Accept request -> moves to connections & removes pending
+  static Future<void> acceptConnectionRequest(ChatUser otherUser) async {
+    await addConnection(otherUser); // use your existing addConnection
+    // delete request docs on both sides
+    await firestore
+        .collection('users')
+        .doc(user.uid)
+        .collection('connection_requests')
+        .doc(otherUser.id)
+        .delete();
+    await firestore
+        .collection('users')
+        .doc(otherUser.id)
+        .collection('connection_requests')
+        .doc(user.uid)
+        .delete();
+  }
+
+// Decline request -> just remove pending docs
+  static Future<void> declineConnectionRequest(ChatUser otherUser) async {
+    await firestore
+        .collection('users')
+        .doc(user.uid)
+        .collection('connection_requests')
+        .doc(otherUser.id)
+        .delete();
+    await firestore
+        .collection('users')
+        .doc(otherUser.id)
+        .collection('connection_requests')
+        .doc(user.uid)
+        .delete();
+  }
+
+  // Get incoming requests (others sent to me, waiting for my action)
+  static Stream<QuerySnapshot<Map<String, dynamic>>> getIncomingRequests() {
+    return firestore
+        .collection('users')
+        .doc(user.uid)
+        .collection('connection_requests')
+        .where('status', isEqualTo: 'pending')
+        .snapshots();
+  }
+
+  // Get outgoing requests (I sent to others, waiting for them to accept/decline)
+  static Stream<QuerySnapshot<Map<String, dynamic>>> getOutgoingRequests() {
+    return firestore
+        .collection('users')
+        .doc(user.uid)
+        .collection('connection_requests')
+        .where('status', isEqualTo: 'sent')
+        .snapshots();
+  }
+
+  // for adding a friend (pick one user from all users in db)
+  static Future<ChatUser?> getUserByEmail(String email) async {
+    final query = await firestore
+        .collection('users')
+        .where('email', isEqualTo: email)
+        .limit(1)
+        .get();
+
+    if (query.docs.isNotEmpty) {
+      return ChatUser.fromJson(query.docs.first.data());
+    }
+    return null;
+  }
+
+  // Add another user as a connection (mutual)
+  static Future<void> addConnection(ChatUser otherUser) async {
+    final myId = user.uid;
+    final otherId = otherUser.id;
+
+    // Use a batch so both writes succeed or fail together
+    final batch = firestore.batch();
+
+    // Add otherUser to my connections
+    final myConnRef = firestore
+        .collection('users')
+        .doc(myId)
+        .collection('connections')
+        .doc(otherId);
+
+    batch.set(myConnRef, {
+      'id': otherUser.id,
+      'name': otherUser.name,
+      'email': otherUser.email,
+      'image': otherUser.image,
+      'about': otherUser.about,
+      'createdAt': FieldValue.serverTimestamp(),
+    });
+
+    // Add me to otherUser's connections
+    final otherConnRef = firestore
+        .collection('users')
+        .doc(otherId)
+        .collection('connections')
+        .doc(myId);
+
+    batch.set(otherConnRef, {
+      'id': me.id,
+      'name': me.name,
+      'email': me.email,
+      'image': me.image,
+      'about': me.about,
+      'createdAt': FieldValue.serverTimestamp(),
+    });
+
+    await batch.commit();
+  }
+
   //to update user info
   static Future<void> UpdateUserInfo() async{
     await firestore
@@ -130,6 +290,7 @@ class APIS{
         .update({
       'name': me.name,
       'about': me.about,
+      'preferredLanguage': me.preferredLanguage,
     })
     ;
   }
@@ -231,6 +392,30 @@ class APIS{
     log('Started periodic presence tracking');
   }
 
+  // Block a user (one-way: they won't appear in my list)
+  static Future<void> blockUser(ChatUser otherUser) async {
+    await firestore
+        .collection('users')
+        .doc(user.uid)
+        .collection('blocked')
+        .doc(otherUser.id)
+        .set({
+      'id': otherUser.id,
+      'name': otherUser.name,
+      'email': otherUser.email,
+      'blockedAt': FieldValue.serverTimestamp(),
+    });
+  }
+
+// Report a user (goes into a "reports" collection for admin review)
+  static Future<void> reportUser(ChatUser otherUser, String reason) async {
+    await firestore.collection('reports').add({
+      'reportedBy': user.uid,
+      'reportedUser': otherUser.id,
+      'reason': reason,
+      'timestamp': FieldValue.serverTimestamp(),
+    });
+  }
 
   static Future<void> cleanupPreviousSession() async {
     try {
@@ -550,7 +735,7 @@ class APIS{
 
         final requestBody = {
           'text': text,
-          'source_lang': 'auto', // automatic detection
+          // 'source_lang': 'auto', // automatic detection
           'target_lang': targetLang,
         };
 
@@ -610,7 +795,8 @@ class APIS{
 
   // Get display text (translate if needed)
   static Future<String> getDisplayText(Message message) async {
-    final viewerLang = await getUserPreferredLanguage(user.uid);
+    final viewerLang = await getUserPreferredLanguage(APIS.user.uid);
+
     // If it's your own message, show original
     if (message.fromID == user.uid) {
       return message.originalMsg;

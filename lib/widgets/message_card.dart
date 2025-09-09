@@ -52,7 +52,7 @@ Widget _greyMessage() {
         // message content
         Flexible(
           child: Container(
-            padding: EdgeInsets.symmetric(vertical: mq.width * 0.03, horizontal:  mq.width * 0.04),
+            padding: EdgeInsets.symmetric(vertical: mq.width * 0.02, horizontal:  mq.width * 0.03),
             margin: EdgeInsets.symmetric(
               horizontal: mq.width * 0.04, vertical: mq.height * 0.01),
               decoration: BoxDecoration(
@@ -73,7 +73,7 @@ Widget _greyMessage() {
               child: Text(
                 displayText ?? "...",
                 style: TextStyle(
-                  fontSize: 16,
+                  fontSize: 14,
                 ),
               ),
                 ),
@@ -86,7 +86,7 @@ Widget _greyMessage() {
             MyDateUtil.getFormattedTime(
                 context: context, time: widget.message.sent),
             style: TextStyle(
-              fontSize: 13
+              fontSize: 10
             ),
           ),
         ),
@@ -108,7 +108,7 @@ Widget _blueMessage(){
               if (widget.message.read.isNotEmpty)
               Icon(Icons.done_all_rounded,
                 color: Colors.blue,
-              size: 20),
+              size: 15),
               //some space
               SizedBox(width: 2),
 
@@ -117,7 +117,7 @@ Widget _blueMessage(){
                MyDateUtil.getFormattedTime(
                    context: context, time: widget.message.sent),
                 style: TextStyle(
-                    fontSize: 13
+                    fontSize: 10
                 ),
               )
             ]
@@ -125,7 +125,7 @@ Widget _blueMessage(){
               // message content
               Flexible(
                 child: Container(
-                  padding: EdgeInsets.symmetric(vertical: mq.width * 0.03, horizontal:  mq.width * 0.04),
+                  padding: EdgeInsets.symmetric(vertical: mq.width * 0.02, horizontal:  mq.width * 0.03),
                   margin: EdgeInsets.symmetric(
                       horizontal: mq.width * 0.04, vertical: mq.height * 0.01),
                   decoration: BoxDecoration(
@@ -148,7 +148,7 @@ Widget _blueMessage(){
                     displayText ?? "...",
                     // widget.message.originalMsg,
                     style: TextStyle(
-                      fontSize: 16,
+                      fontSize: 14,
                     ),
                   ),
                 ),

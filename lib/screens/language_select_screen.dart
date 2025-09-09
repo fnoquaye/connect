@@ -56,10 +56,10 @@ class _LanguageSelectScreenState extends State<LanguageSelectScreen> {
               value: _selectedLang.isEmpty ? null : _selectedLang,
               hint: Text('Select a language'),
               isExpanded: true,
-              items: supportedLanguages.entries.map((entry) {
+              items: LanguageConstants.languageCodes.map((langCode) {
                 return DropdownMenuItem(
-                  value: entry.key,
-                  child: Text(entry.value,
+                  value: langCode,
+                  child: Text(LanguageConstants.getFullDisplayName(langCode),
                       style: TextStyle(fontSize: 16)),
                 );
               }).toList(),

@@ -1,5 +1,6 @@
 import 'dart:developer';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:connect/screens/user_profile_screen.dart';
 import 'package:emoji_picker_flutter/emoji_picker_flutter.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:connect/APIs/apis.dart';
@@ -31,23 +32,25 @@ class _ChatScreenState extends State<ChatScreen> {
   Stream<DocumentSnapshot<Map<String, dynamic>>>? _userStatusStream;
 
   // String _selectedTargetLanguage = 'fr'; // Default to French
-  String _myPreferredLanguage = 'en';
+  final String targetLang = APIS.me.preferredLanguage ?? 'en';
+
+  // String _myPreferredLanguage = 'en';
 
 // Simple language options
-  final Map<String, String> _languages = {
-    'en': 'English',
-    'fr': 'French',
-    'es': 'Spanish',
-    'de': 'German',
-    'it': 'Italian',
-    'pt': 'Portuguese',
-    'ar': 'Arabic',
-    'zh': 'Chinese',
-    'ja': 'Japanese',
-    'ko': 'Korean',
-    'hi': 'Hindi',
-    'sw': 'Swahili',
-  };
+//   final Map<String, String> _languages = {
+//     'en': 'English',
+//     'fr': 'French',
+//     'es': 'Spanish',
+//     'de': 'German',
+//     'it': 'Italian',
+//     'pt': 'Portuguese',
+//     'ar': 'Arabic',
+//     'zh': 'Chinese',
+//     'ja': 'Japanese',
+//     'ko': 'Korean',
+//     'hi': 'Hindi',
+//     'sw': 'Swahili',
+//   };
 
   @override
   void initState() {
@@ -55,17 +58,17 @@ class _ChatScreenState extends State<ChatScreen> {
     // Initialize streams once
     _messagesStream = APIS.getAllMessages(widget.user);
     _userStatusStream = APIS.getUserStatus(widget.user.id);
-    _loadMyPreferredLanguage();
+    // _loadMyPreferredLanguage();
   }
 
-  Future<void> _loadMyPreferredLanguage() async {
-    final preferredLang = await APIS.getUserPreferredLanguage(APIS.user.uid);
-    if (mounted) {
-      setState(() {
-        _myPreferredLanguage = preferredLang;
-      });
-    }
-  }
+  // Future<void> _loadMyPreferredLanguage() async {
+  //   final preferredLang = await APIS.getUserPreferredLanguage(APIS.user.uid);
+  //   if (mounted) {
+  //     setState(() {
+  //       _myPreferredLanguage = preferredLang;
+  //     });
+  //   }
+  // }
 
   final ValueNotifier<bool> _isEmojiPickerVisible = ValueNotifier(false);
 
@@ -135,21 +138,10 @@ class _ChatScreenState extends State<ChatScreen> {
                         case ConnectionState.done:
                         // if(snapshot.hasData){
                           final data = snapshot.data?.docs;
-
                           _list = data
                               ?.map((e) => Message.fromJson(e.data()))
                               .toList() ??
                               [];
-
-                          // Check and mark unread messages as read
-
-
-                          // for (var message in _list) {
-                          //   if (message.read.isEmpty && message.fromID != APIS.user.uid) {
-                          //     log('Marking message as read: ${message.msg}');
-                          //     APIS.updateMessageReadStatus(message);
-                          //   }
-                          // }
 
                           // 🔥 MODIFIED: Check and mark unread messages as read (moved outside of setState)
                           WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -264,7 +256,16 @@ class _ChatScreenState extends State<ChatScreen> {
 
   Widget _appBar(){
     return InkWell(
-      onTap: (){},
+      onTap: (){
+        // Navigate to UserProfileScreen when tapping on user info
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => UserProfileScreen(user: widget.user),
+          ),
+        );
+      },
+      borderRadius: BorderRadius.circular(8),
       child: Row(
         children: [
           //back button
@@ -320,13 +321,6 @@ class _ChatScreenState extends State<ChatScreen> {
               },
             ),
           ),
-
-          //Language Selector Button
-          IconButton(
-            onPressed: _showMyLanguagePreference,
-            icon: Icon(Icons.translate),
-            tooltip: 'Select Language (${_languages[_myPreferredLanguage]})',
-          ),
         ],
       ),
     );
@@ -346,54 +340,5 @@ class _ChatScreenState extends State<ChatScreen> {
     _textChangeDebouncer?.cancel();
     _textChangeDebouncer = Timer(const Duration(milliseconds: 150), () {
     });
-  }
-
-  // UPDATED: Language preference selector (for current user)
-  void _showMyLanguagePreference() {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text('My Language Preference'),
-        content: Container(
-          width: double.minPositive,
-          child: ListView.builder(
-            shrinkWrap: true,
-            itemCount: _languages.length,
-            itemBuilder: (context, index) {
-              final langCode = _languages.keys.elementAt(index);
-              final langName = _languages[langCode]!;
-
-              return RadioListTile<String>(
-                title: Text(langName),
-                subtitle: Text('I want to receive messages in $langName'),
-                value: langCode,
-                groupValue: _myPreferredLanguage,
-                onChanged: (value) async {
-                  // Update in Firestore
-                  await APIS.updateMyPreferredLanguage(value!);
-
-                  setState(() {
-                    _myPreferredLanguage = value;
-                  });
-
-                  Navigator.pop(context);
-
-                  // Show confirmation
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Language preference updated to $langName')),
-                  );
-                },
-              );
-            },
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text('Cancel'),
-          ),
-        ],
-      ),
-    );
   }
 }

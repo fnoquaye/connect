@@ -2,11 +2,12 @@ import 'dart:io';
 
 import 'package:connect/APIs/apis.dart';
 import 'package:connect/helper/dialogs.dart';
-import 'package:connect/screens/language_select_screen.dart';
+// import 'package:connect/screens/language_select_screen.dart';
 // import 'package:connect/screens/homescreen.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../main.dart';
 
@@ -18,6 +19,8 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
+
+
   bool _isAnimate = false;
   bool _isSigningIn = false; // Add loading state
 
@@ -31,6 +34,17 @@ class _LoginScreenState extends State<LoginScreen> {
         });
       }
     });
+  }
+
+
+  Future<void> _launchURL() async {
+    //google sign up page logic
+    final Uri _url = Uri.parse("https://accounts.google.com/signup");
+    if (!await launchUrl(_url,
+        mode: LaunchMode.externalApplication,
+    )) {
+      throw Exception("Could not launch $_url");
+    }
   }
 
 
@@ -350,7 +364,8 @@ class _LoginScreenState extends State<LoginScreen> {
             width: mq.width * 0.8,
             left: mq.width * 0.1,
             height: mq.height * 0.06,
-            child: TextButton(onPressed: (){},
+            child: TextButton(
+                onPressed: _launchURL,
                 child: const Text('Create a Google Account',
                   style: TextStyle(
                     // color: Colors.black,

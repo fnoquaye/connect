@@ -8,7 +8,7 @@ class ChatUser {
   final DateTime? createdAt;
   late final DateTime? lastActive;
   late final bool isOnline;
-  late final String? preferredLanguage;
+   String? preferredLanguage;
   final String email;
   final String? pushToken;
 
