@@ -18,6 +18,7 @@ class Message {
  late final String msg;
  late final String originalMsg;
  late final String read;
+ late final String? imageUrl;
  late final MessageType type;
  late final String fromID;
  late final String sent;
@@ -25,6 +26,17 @@ class Message {
  late final String recipientLanguage;
  late final bool wasTranslated;
  late final bool translationSucceeded;
+ // NEW: Edit functionality
+ late final bool isEdited;
+ late final String? editedAt;
+ late final String? originalMessage; // Store original before edit
+ // NEW: Reply functionality
+ late final String? replyToMessageId;
+ late final String? replyToMessage; // Store replied message content
+ // NEW: Delete functionality
+ late final bool isDeleted;
+ late final String? deletedAt;
+ late final String? deletedBy;
 
 
   Message({
@@ -39,6 +51,16 @@ class Message {
     required this.recipientLanguage,
     required this.wasTranslated,
     required this.translationSucceeded,
+    this.imageUrl,
+    // NEW: Enhanced message features
+    this.isEdited = false,
+    this.editedAt,
+    this.originalMessage,
+    this.replyToMessageId,
+    this.replyToMessage,
+    this.isDeleted = false,
+    this.deletedAt,
+    this.deletedBy,
   });
 
    Message.fromJson(Map<String, dynamic> json) {
@@ -53,6 +75,16 @@ class Message {
     recipientLanguage = json['recipientLanguage']?.toString() ?? 'en';
     wasTranslated = json['wasTranslated'] ?? false;
     translationSucceeded = json['translationSucceeded'] ?? false;
+    imageUrl = json['imageUrl']?.toString();
+    // NEW: Enhanced features
+    isEdited = json['isEdited'] ?? false;
+    editedAt = json['editedAt']?.toString();
+    originalMessage = json['originalMessage']?.toString();
+    replyToMessageId = json['replyToMessageId']?.toString();
+    replyToMessage = json['replyToMessage']?.toString();
+    isDeleted = json['isDeleted'] ?? false;
+    deletedAt = json['deletedAt']?.toString();
+    deletedBy = json['deletedBy']?.toString();
    }
 
 
@@ -70,14 +102,41 @@ class Message {
      data['recipientLanguage'] = recipientLanguage;
      data['wasTranslated'] = wasTranslated;
      data['translationSucceeded'] = translationSucceeded;
+     if (imageUrl != null) data['imageUrl'] = imageUrl;
+     // NEW: Enhanced features
+     data['isEdited'] = isEdited;
+     if (editedAt != null) data['editedAt'] = editedAt;
+     if (originalMessage != null) data['originalMessage'] = originalMessage;
+     if (replyToMessageId != null) data['replyToMessageId'] = replyToMessageId;
+     if (replyToMessage != null) data['replyToMessage'] = replyToMessage;
+     data['isDeleted'] = isDeleted;
+     if (deletedAt != null) data['deletedAt'] = deletedAt;
+     if (deletedBy != null) data['deletedBy'] = deletedBy;
      return data;
     }
+
+ // Helper method to check if user can edit this message
+ bool canEdit(String currentUserId) {
+   return fromID == currentUserId &&
+       !isDeleted &&
+       type == MessageType.text &&
+       DateTime.now().difference(
+           DateTime.fromMillisecondsSinceEpoch(int.parse(sent))
+       ).inMinutes <= 10; // Allow editing within 10 minutes
+ }
+
+ // Helper method to check if user can delete this message
+ bool canDelete(String currentUserId) {
+   return fromID == currentUserId && !isDeleted;
+ }
+
 
  Message copyWith({
    String? msg,
    String? read,
    bool? wasTranslated,
    bool? translationSucceeded,
+   String? imageUrl,
  }) {
    return Message(
      toID: toID,
@@ -91,6 +150,7 @@ class Message {
      recipientLanguage: recipientLanguage,
      wasTranslated: wasTranslated ?? this.wasTranslated,
      translationSucceeded: translationSucceeded ?? this.translationSucceeded,
+     imageUrl: imageUrl ?? this.imageUrl,
    );
  }
 }

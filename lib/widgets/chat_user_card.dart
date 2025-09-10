@@ -69,12 +69,19 @@ class _ChatUserCardState extends State<ChatUserCard> {
                             ),
                           ),
                           title: Text(widget.user.name),
-                          subtitle:  _message != null
-                              ? FutureBuilder<String>(
-                            future: APIS.getDisplayText(_message!), // now safe
+                          subtitle: _message != null
+                              ? (_message!.type == MessageType.image
+                              ? Text(
+                            _message!.isDeleted ? "This message was deleted" : "📷 Image",
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(fontStyle: _message!.isDeleted ? FontStyle.italic : null),
+                          )
+                              : FutureBuilder<String>(
+                            future: APIS.getDisplayText(_message!),
                             builder: (context, snapshot) {
                               if (snapshot.connectionState == ConnectionState.waiting) {
-                                return const Text("..."); // loading indicator
+                                return const Text("...");
                               }
                               if (snapshot.hasError) {
                                 return const Text("Error loading message");
@@ -85,7 +92,7 @@ class _ChatUserCardState extends State<ChatUserCard> {
                                 overflow: TextOverflow.ellipsis,
                               );
                             },
-                          )
+                          ))
                               : Text(widget.user.about),
                           // Text(
                           //   _message != null

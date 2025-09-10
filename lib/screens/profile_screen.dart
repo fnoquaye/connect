@@ -63,7 +63,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   child: IntrinsicHeight(
                     child: Column(
                       children: [
-                        //space with sizedbox
+                        //space with sized box
                         SizedBox(width: mq.width, height: mq.height * 0.03),
                         //profile picture
 

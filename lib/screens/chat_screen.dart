@@ -12,6 +12,7 @@ import 'package:flutter/material.dart';
 import 'dart:async';
 
 import '../helper/chat_input_bar.dart';
+import '../helper/chat_input_controller.dart';
 import '../main.dart';
 
 class ChatScreen extends StatefulWidget {
@@ -34,41 +35,13 @@ class _ChatScreenState extends State<ChatScreen> {
   // String _selectedTargetLanguage = 'fr'; // Default to French
   final String targetLang = APIS.me.preferredLanguage ?? 'en';
 
-  // String _myPreferredLanguage = 'en';
-
-// Simple language options
-//   final Map<String, String> _languages = {
-//     'en': 'English',
-//     'fr': 'French',
-//     'es': 'Spanish',
-//     'de': 'German',
-//     'it': 'Italian',
-//     'pt': 'Portuguese',
-//     'ar': 'Arabic',
-//     'zh': 'Chinese',
-//     'ja': 'Japanese',
-//     'ko': 'Korean',
-//     'hi': 'Hindi',
-//     'sw': 'Swahili',
-//   };
-
   @override
   void initState() {
     super.initState();
     // Initialize streams once
     _messagesStream = APIS.getAllMessages(widget.user);
     _userStatusStream = APIS.getUserStatus(widget.user.id);
-    // _loadMyPreferredLanguage();
   }
-
-  // Future<void> _loadMyPreferredLanguage() async {
-  //   final preferredLang = await APIS.getUserPreferredLanguage(APIS.user.uid);
-  //   if (mounted) {
-  //     setState(() {
-  //       _myPreferredLanguage = preferredLang;
-  //     });
-  //   }
-  // }
 
   final ValueNotifier<bool> _isEmojiPickerVisible = ValueNotifier(false);
 
@@ -162,7 +135,17 @@ class _ChatScreenState extends State<ChatScreen> {
                                   final reversedIndex = _list.length - 1 - index;
                                   return MessageCard(
                                       key:  ValueKey(_list[reversedIndex].sent), // Add key for better performance,
-                                      message: _list[reversedIndex]
+                                      message: _list[reversedIndex],
+                                      onReply: (msg){
+                                        ChatInputController.setReplyMessage(msg);
+                                        // Focus text field
+                                        _textController.text = '';
+                                        FocusScope.of(context).requestFocus();
+                                      },
+                                    onEdit: (msg){
+                                      ChatInputController.setEditMessage(msg);
+                                      FocusScope.of(context).requestFocus();
+                                    },
                                   );
                                 }
                             );

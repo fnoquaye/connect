@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:developer';
+import 'dart:io';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:connect/models/chat_user.dart';
 import 'package:connect/models/messages.dart';
@@ -619,9 +620,9 @@ class APIS{
 
 
   //for sending messages
-  static Future<bool> sendMessage(ChatUser chatUser, String msg) async {
+  static Future<bool> sendMessage(ChatUser chatUser, String msg, {String? imageUrl, MessageType type = MessageType.text,}) async {
     try{
-      if (msg.trim().isEmpty)
+      if (type==MessageType.text && msg.trim().isEmpty)
         return false;
 
       print('📤 SEND MESSAGE DEBUG:');
@@ -638,7 +639,8 @@ class APIS{
       print('  - Sender language: "$senderLang"');
 
       // Determine if translation is needed
-      final needsTranslation = senderLang != freshRecipientLang;
+      final needsTranslation = type == MessageType.text
+          && senderLang != freshRecipientLang;
       print('  - Translation needed: $needsTranslation');
 
       String translatedMsg = msg;
@@ -651,12 +653,14 @@ class APIS{
           sourceLang: senderLang,
           targetLang: freshRecipientLang,
         );
-
         translatedMsg = translationResult['text'];
         translationSucceeded = translationResult['success'];
 
+        //debugs
         print('  - Translation result: "$translatedMsg"');
         print('  - Translation succeeded: $translationSucceeded');
+      } else if (type != MessageType.text){
+        print('  - Skipping translation for non-text message type');
       }
 
       // message sending time
@@ -668,13 +672,14 @@ class APIS{
           msg: translatedMsg,
           originalMsg: msg,
           read: '',
-          type: MessageType.text,
+          type: type,
           fromID: user.uid,
           sent: time,
           senderLanguage: senderLang,            // NEW: Track sender language
           recipientLanguage: freshRecipientLang, // NEW: Track recipient language
           wasTranslated: needsTranslation,       // NEW: Track if translated
           translationSucceeded: translationSucceeded, // NEW: Track success
+          imageUrl: imageUrl,                     // 🔥 save image URL if provided
       );
 
 
@@ -795,17 +800,25 @@ class APIS{
 
   // Get display text (translate if needed)
   static Future<String> getDisplayText(Message message) async {
-    final viewerLang = await getUserPreferredLanguage(APIS.user.uid);
-
     // If it's your own message, show original
     if (message.fromID == user.uid) {
       return message.originalMsg;
     }
+
+    final viewerLang = await getUserPreferredLanguage(APIS.user.uid);
+
+    // if already translated, use it
     if (message.recipientLanguage == viewerLang &&
         message.wasTranslated &&
         message.translationSucceeded){
       return message.msg;
     }
+
+    // If viewer's language is same as sender's language, show original
+    if (message.senderLanguage == viewerLang) {
+      return message.originalMsg;
+    }
+
     // Re-translate if viewer's language is different
     final retranslated = await translateTextWithFallback(
       text: message.originalMsg,
@@ -814,6 +827,242 @@ class APIS{
     );
 
     return retranslated['text'];
+  }
+
+  // NEW: Edit an existing message
+  static Future<bool> editMessage(String chatUserId, String messageId, String newMessage) async {
+    try {
+      print('📝 EDITING MESSAGE:');
+      print('  - Message ID: $messageId');
+      print('  - New content: "$newMessage"');
+
+      final messageRef = firestore
+          .collection('chats/${getConversationID(chatUserId)}/messages/')
+          .doc(messageId);
+
+      // Get original message first
+      final originalDoc = await messageRef.get();
+      if (!originalDoc.exists) {
+        print('❌ Message not found for editing');
+        return false;
+      }
+
+      final originalData = originalDoc.data()!;
+      final originalMessage = Message.fromJson(originalData);
+
+      // Check if user can edit (must be sender and within time limit)
+      if (!originalMessage.canEdit(user.uid)) {
+        print('❌ Cannot edit this message');
+        return false;
+      }
+
+      // Get recipient language for translation
+      final recipientLang = await getUserPreferredLanguage(chatUserId);
+      final senderLang = await getUserPreferredLanguage(user.uid);
+
+      String translatedMsg = newMessage;
+      bool translationSucceeded = true;
+      bool needsTranslation = senderLang != recipientLang;
+
+      if (needsTranslation) {
+        final translationResult = await translateTextWithFallback(
+          text: newMessage,
+          sourceLang: senderLang,
+          targetLang: recipientLang,
+        );
+        translatedMsg = translationResult['text'];
+        translationSucceeded = translationResult['success'];
+      }
+
+      // Update message with edit information
+      await messageRef.update({
+        'msg': translatedMsg,
+        'originalMsg': newMessage,
+        'isEdited': true,
+        'editedAt': DateTime.now().millisecondsSinceEpoch.toString(),
+        'originalMessage': originalMessage.isEdited
+            ? originalMessage.originalMessage // Keep the very first version
+            : originalMessage.originalMsg,
+        'wasTranslated': needsTranslation,
+        'translationSucceeded': translationSucceeded,
+      });
+
+      print('✅ Message edited successfully');
+      return true;
+    } catch (e) {
+      print('❌ Error editing message: $e');
+      return false;
+    }
+  }
+
+  // NEW: Reply to a message
+  static Future<bool> replyToMessage(ChatUser chatUser, String replyMessage, Message originalMessage) async {
+    try {
+      if (replyMessage.trim().isEmpty) return false;
+
+      print('💬 REPLYING TO MESSAGE:');
+      print('  - Original: "${originalMessage.msg}"');
+      print('  - Reply: "$replyMessage"');
+
+      // Get language preferences
+      final freshRecipientLang = await getUserPreferredLanguage(chatUser.id);
+      final senderLang = await getUserPreferredLanguage(user.uid);
+
+      // Translate reply if needed
+      String translatedReply = replyMessage;
+      bool translationSucceeded = true;
+      bool needsTranslation = senderLang != freshRecipientLang;
+
+      if (needsTranslation) {
+        final translationResult = await translateTextWithFallback(
+          text: replyMessage,
+          sourceLang: senderLang,
+          targetLang: freshRecipientLang,
+        );
+        translatedReply = translationResult['text'];
+        translationSucceeded = translationResult['success'];
+      }
+
+      final time = DateTime.now().millisecondsSinceEpoch.toString();
+
+      // Create reply message
+      final Message message = Message(
+        toID: chatUser.id,
+        msg: translatedReply,
+        originalMsg: replyMessage,
+        read: '',
+        type: MessageType.text,
+        fromID: user.uid,
+        sent: time,
+        senderLanguage: senderLang,
+        recipientLanguage: freshRecipientLang,
+        wasTranslated: needsTranslation,
+        translationSucceeded: translationSucceeded,
+        // Reply-specific fields
+        replyToMessageId: originalMessage.sent,
+        replyToMessage: originalMessage.originalMsg.length > 100
+            ? '${originalMessage.originalMsg.substring(0, 100)}...'
+            : originalMessage.originalMsg,
+      );
+
+      final ref = firestore
+          .collection('chats/${getConversationID(chatUser.id)}/messages/');
+      await ref.doc(time).set(message.toJson())
+          .timeout(const Duration(seconds: 10));
+
+      print('✅ Reply sent successfully');
+      return true;
+    } catch (e) {
+      print('❌ Error sending reply: $e');
+      return false;
+    }
+  }
+
+  // NEW: Delete a message (soft delete)
+  static Future<bool> deleteMessage(String chatUserId, String messageId, bool deleteForEveryone) async {
+    try {
+      print('🗑️ DELETING MESSAGE:');
+      print('  - Message ID: $messageId');
+      print('  - Delete for everyone: $deleteForEveryone');
+
+      final messageRef = firestore
+          .collection('chats/${getConversationID(chatUserId)}/messages/')
+          .doc(messageId);
+
+      // Get original message first
+      final originalDoc = await messageRef.get();
+      if (!originalDoc.exists) {
+        print('❌ Message not found for deletion');
+        return false;
+      }
+
+      final originalMessage = Message.fromJson(originalDoc.data()!);
+
+      // Check if user can delete
+      if (!originalMessage.canDelete(user.uid)) {
+        print('❌ Cannot delete this message');
+        return false;
+      }
+
+      if (deleteForEveryone) {
+        // Hard delete - remove completely
+        await messageRef.delete();
+        print('✅ Message deleted for everyone');
+      } else {
+        // Soft delete - mark as deleted
+        await messageRef.update({
+          'isDeleted': true,
+          'deletedAt': DateTime.now().millisecondsSinceEpoch.toString(),
+          'deletedBy': user.uid,
+          'msg': 'This message was deleted',
+          'originalMsg': 'This message was deleted',
+        });
+        print('✅ Message deleted for you');
+      }
+
+      return true;
+    } catch (e) {
+      print('❌ Error deleting message: $e');
+      return false;
+    }
+  }
+
+  // Update message method
+  static Future<bool> updateMessage(ChatUser chatUser, Message message, String newMessage) async {
+    try {
+      print('📝 UPDATING MESSAGE:');
+      print('  - Message ID: ${message.sent}');
+      print('  - New content: "$newMessage"');
+
+      // Use the existing editMessage method
+      return await editMessage(chatUser.id, message.sent, newMessage);
+    } catch (e) {
+      print('❌ Error in updateMessage wrapper: $e');
+      return false;
+    }
+  }
+
+  // NEW: Get message by ID (useful for reply context)
+  static Future<Message?> getMessageById(String chatUserId, String messageId) async {
+    try {
+      final doc = await firestore
+          .collection('chats/${getConversationID(chatUserId)}/messages/')
+          .doc(messageId)
+          .get();
+
+      if (doc.exists) {
+        return Message.fromJson(doc.data()!);
+      }
+      return null;
+    } catch (e) {
+      print('❌ Error getting message: $e');
+      return null;
+    }
+  }
+
+  // NEW: Check if user can perform actions on message
+  static bool canPerformMessageAction(Message message, String action) {
+    final currentUserId = user.uid;
+    final now = DateTime.now();
+    final messageTime = DateTime.fromMillisecondsSinceEpoch(int.parse(message.sent));
+    final timeDiff = now.difference(messageTime);
+
+    switch (action) {
+      case 'edit':
+        return message.fromID == currentUserId &&
+            !message.isDeleted &&
+            message.type == MessageType.text &&
+            timeDiff.inMinutes <= 10; // 10 minute edit window
+
+      case 'delete':
+        return !message.isDeleted;
+
+      case 'reply':
+        return !message.isDeleted;
+
+      default:
+        return false;
+    }
   }
 
   // get user's preferred language
@@ -879,6 +1128,33 @@ class APIS{
         .collection('chats/${getConversationID(user.id)}/messages/')
         .orderBy('sent', descending: false)
         .snapshots();
+  }
+
+  // upload to cloudinary
+  static Future<String?> uploadImageToCloudinary(File image) async {
+    try {
+      var request = http.MultipartRequest(
+        'POST',
+        Uri.parse('https://api.cloudinary.com/v1_1/dfhmxr0iy/image/upload'), // replace <CLOUD_NAME>
+      );
+
+      request.fields['upload_preset'] = 'unsigned_preset'; // your unsigned preset
+      request.files.add(await http.MultipartFile.fromPath('file', image.path));
+
+      var response = await request.send();
+      var resStream = await http.Response.fromStream(response);
+
+      if (response.statusCode == 200) {
+        var data = json.decode(resStream.body);
+        return data['secure_url']; // this is the URL you store in Firestore
+      } else {
+        print('Cloudinary upload failed: ${resStream.body}');
+        return null;
+      }
+    } catch (e) {
+      print('Error uploading image: $e');
+      return null;
+    }
   }
 
   // update read status of message
