@@ -28,9 +28,10 @@ class _ChatScreenState extends State<ChatScreen> {
 
   final ValueNotifier<bool> _isTextEmpty = ValueNotifier(true);
 
-  // 🔥 NEW: Cache streams to prevent recreation
+  // Cache streams to prevent recreation
   Stream<QuerySnapshot<Map<String, dynamic>>>? _messagesStream;
   Stream<DocumentSnapshot<Map<String, dynamic>>>? _userStatusStream;
+  Stream<DocumentSnapshot<Map<String, dynamic>>>? _userProfileStream; // NEW: Real-time user profile
 
   // String _selectedTargetLanguage = 'fr'; // Default to French
   final String targetLang = APIS.me.preferredLanguage ?? 'en';
@@ -38,9 +39,11 @@ class _ChatScreenState extends State<ChatScreen> {
   @override
   void initState() {
     super.initState();
+    // _loadFullUser();
     // Initialize streams once
     _messagesStream = APIS.getAllMessages(widget.user);
     _userStatusStream = APIS.getUserStatus(widget.user.id);
+    _userProfileStream = APIS.getUserProfileStream(widget.user.id); // NEW: Real-time profile stream
   }
 
   final ValueNotifier<bool> _isEmojiPickerVisible = ValueNotifier(false);
@@ -89,7 +92,6 @@ class _ChatScreenState extends State<ChatScreen> {
             automaticallyImplyLeading: false,
             flexibleSpace: _appBar(),
           ),
-
 
 
           //body
@@ -172,7 +174,6 @@ class _ChatScreenState extends State<ChatScreen> {
                 onSend: (msg) async => await APIS.sendMessage(widget.user, msg),
               ),
 
-              // _chatInput(),
               // Fixed emoji picker for v4.3.0 syntax
               ValueListenableBuilder<bool>(
                 valueListenable: _isEmojiPickerVisible,
@@ -236,78 +237,176 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 
-
   Widget _appBar(){
-    return InkWell(
-      onTap: (){
-        // Navigate to UserProfileScreen when tapping on user info
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => UserProfileScreen(user: widget.user),
+    // 🔥 FIXED: Use StreamBuilder for real-time user profile updates
+    return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+      stream: _userProfileStream,
+      builder: (context, profileSnapshot) {
+        // Get the most up-to-date user data
+        ChatUser currentUser = widget.user;
+        if (profileSnapshot.hasData && profileSnapshot.data!.exists) {
+          currentUser = ChatUser.fromJson(profileSnapshot.data!.data()!);
+        }
+
+        final imageUrl = (currentUser.image.isNotEmpty) ? currentUser.image : '';
+
+        return InkWell(
+          onTap: () {
+            // Always use the most current user data for navigation
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => UserProfileScreen(user: currentUser),
+              ),
+            );
+          },
+          borderRadius: BorderRadius.circular(8),
+          child: Row(
+            children: [
+              IconButton(
+                  onPressed: (){Navigator.pop(context);},
+                  icon: const Icon(Icons.arrow_back,)
+              ),
+
+              // User profile picture with real-time updates
+              imageUrl.isEmpty
+                  ? const CircleAvatar(child: Icon(CupertinoIcons.person))
+                  : ClipRRect(
+                borderRadius: BorderRadius.circular(mq.height * 0.03),
+                child: CachedNetworkImage(
+                  width: mq.height * 0.05,
+                  height: mq.height * 0.05,
+                  imageUrl: imageUrl,
+                  placeholder: (context, url) => CircularProgressIndicator(),
+                  errorWidget: (context, url, error) => CircleAvatar(
+                      child: Icon(CupertinoIcons.person)),
+                ),
+              ),
+
+              const SizedBox(width: 10),
+
+              // Name and status with real-time updates
+              Expanded(
+                child: StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+                  stream: _userStatusStream,
+                  builder: (context, snapshot){
+                    final statusData = APIS.parseUserStatus(snapshot.data, currentUser);
+
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          currentUser.name, // Use current user data
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          statusData['statusText'],
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: statusData['isOnline'] ? Colors.green : Colors.grey,
+                          ),
+                        ),
+                      ],
+                    );
+                  },
+                ),
+              ),
+            ],
           ),
         );
       },
-      borderRadius: BorderRadius.circular(8),
-      child: Row(
-        children: [
-          //back button
-          IconButton(
-              onPressed: (){Navigator.pop(context);},
-              icon: const Icon(Icons.arrow_back,)
-          ),
-
-          //user profile picture
-          ClipRRect(
-            borderRadius: BorderRadius.circular(mq.height * 0.03),
-            child: CachedNetworkImage(
-              width: mq.height * 0.05,
-              height: mq.height * 0.05,
-              imageUrl: widget.user.image,
-              placeholder: (context, url) => CircularProgressIndicator(),
-              errorWidget: (context, url, error) => CircleAvatar(
-                  child: Icon(CupertinoIcons.person)),
-            ),
-          ),
-
-          const SizedBox(width: 10),
-
-          // Name and status with cleaner StreamBuilder
-          Expanded(
-            child: StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-              stream: _userStatusStream,
-              builder: (context, snapshot){
-                // Use the new parseUserStatus method for cleaner code
-                final statusData = APIS.parseUserStatus(snapshot.data, widget.user);
-
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text(
-                      widget.user.name,
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      statusData['statusText'],
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: statusData['isOnline'] ? Colors.green : Colors.grey,
-                      ),
-                    ),
-                  ],
-                );
-              },
-            ),
-          ),
-        ],
-      ),
     );
   }
+
+
+  // Widget _appBar(){
+  //   final imageUrl = (_fullUser?.image != null && _fullUser!.image.isNotEmpty)
+  //       ? _fullUser!.image
+  //       : '';
+  //   return InkWell(
+  //     onTap: () async {
+  //       final fullUser = await APIS.getUserById(widget.user.id);
+  //       if(fullUser != null){
+  //         // Navigate to UserProfileScreen when tapping on user info
+  //         Navigator.push(
+  //             context,
+  //             MaterialPageRoute(
+  //               builder: (context) => UserProfileScreen(user: fullUser),
+  //             ),
+  //       );
+  //     } else {
+  //         ScaffoldMessenger.of(context).showSnackBar(
+  //           const SnackBar(content: Text("Unable to load user profile")),
+  //         );
+  //       }
+  //       },
+  //     borderRadius: BorderRadius.circular(8),
+  //     child: Row(
+  //       children: [
+  //         //back button
+  //         IconButton(
+  //             onPressed: (){Navigator.pop(context);},
+  //             icon: const Icon(Icons.arrow_back,)
+  //         ),
+  //         //user profile picture
+  //         imageUrl.isEmpty
+  //             ? const CircleAvatar(child: Icon(CupertinoIcons.person))
+  //             :
+  //         ClipRRect(
+  //           borderRadius: BorderRadius.circular(mq.height * 0.03),
+  //           child: CachedNetworkImage(
+  //             width: mq.height * 0.05,
+  //             height: mq.height * 0.05,
+  //             imageUrl: imageUrl,
+  //             placeholder: (context, url) => CircularProgressIndicator(),
+  //             errorWidget: (context, url, error) => CircleAvatar(
+  //                 child: Icon(CupertinoIcons.person)),
+  //           ),
+  //         ),
+  //
+  //         const SizedBox(width: 10),
+  //
+  //         // Name and status with cleaner StreamBuilder
+  //         Expanded(
+  //           child: StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+  //             stream: _userStatusStream,
+  //             builder: (context, snapshot){
+  //               // Use the new parseUserStatus method for cleaner code
+  //               final statusData = APIS.parseUserStatus(snapshot.data, widget.user);
+  //
+  //               return Column(
+  //                 crossAxisAlignment: CrossAxisAlignment.start,
+  //                 mainAxisAlignment: MainAxisAlignment.center,
+  //                 children: [
+  //                   Text(
+  //                     widget.user.name,
+  //                     style: const TextStyle(
+  //                       fontSize: 16,
+  //                       fontWeight: FontWeight.w500,
+  //                     ),
+  //                   ),
+  //                   const SizedBox(height: 2),
+  //                   Text(
+  //                     statusData['statusText'],
+  //                     style: TextStyle(
+  //                       fontSize: 13,
+  //                       color: statusData['isOnline'] ? Colors.green : Colors.grey,
+  //                     ),
+  //                   ),
+  //                 ],
+  //               );
+  //             },
+  //           ),
+  //         ),
+  //       ],
+  //     ),
+  //   );
+  // }
 
   // 🔥 NEW: Optimized text change handler (PERFORMANCE FIX - reduces rebuilds)
   void _handleTextChange(String value) {

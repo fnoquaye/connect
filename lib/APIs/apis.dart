@@ -6,6 +6,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:connect/models/chat_user.dart';
 import 'package:connect/models/messages.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:http/http.dart' as http;
 
 class APIS{
@@ -121,6 +122,179 @@ class APIS{
         .where('id', isNotEqualTo: user.uid)
     // .where('isFake', isEqualTo: false)
         .snapshots();
+  }
+
+  static Future<ChatUser?> getUserById(String uid) async {
+    final doc = await firestore.collection('users').doc(uid).get();
+    if (doc.exists) return ChatUser.fromJson(doc.data()!);
+    return null;
+  }
+
+  // NEW: Get real-time user profile stream (for ChatScreen AppBar updates)
+  static Stream<DocumentSnapshot<Map<String, dynamic>>> getUserProfileStream(String userId) {
+    return firestore
+        .collection('users')
+        .doc(userId)
+        .snapshots();
+  }
+
+  // Comprehensive FCM initialization
+  static Future<void> initializeFCM() async {
+    try {
+      log('🔔 Initializing FCM...');
+
+      // Request notification permissions
+      await requestNotificationPermission();
+
+      // Update FCM token
+      await updateFCMToken();
+
+      // Setup message listeners
+      setupMessageHandlers();
+
+      log('✅ FCM initialization complete');
+    } catch (e) {
+      log('❌ FCM initialization failed: $e');
+    }
+  }
+
+  // Request notification permission
+  static Future<void> requestNotificationPermission() async {
+    try {
+      FirebaseMessaging messaging = FirebaseMessaging.instance;
+
+      NotificationSettings settings = await messaging.requestPermission(
+        alert: true,
+        badge: true,
+        sound: true,
+        announcement: false,
+        carPlay: false,
+        criticalAlert: false,
+        provisional: false,
+      );
+
+      log('📱 Notification permission status: ${settings.authorizationStatus}');
+
+      if (settings.authorizationStatus == AuthorizationStatus.authorized) {
+        log('✅ User granted notification permission');
+      } else if (settings.authorizationStatus == AuthorizationStatus.provisional) {
+        log('⚠️ User granted provisional notification permission');
+      } else {
+        log('❌ User declined or has not accepted notification permission');
+      }
+    } catch (e) {
+      log('❌ Error requesting notification permission: $e');
+    }
+    // FirebaseMessaging messaging = FirebaseMessaging.instance;
+    //
+    // NotificationSettings settings = await messaging.requestPermission(
+    //   alert: true,
+    //   badge: true,
+    //   sound: true,
+    // );
+    //
+    // print('User granted permission: ${settings.authorizationStatus}');
+  }
+
+  // Get FCM token and save to user document
+  static Future<void> updateFCMToken() async {
+    try {
+      FirebaseMessaging messaging = FirebaseMessaging.instance;
+
+      // Get current token
+      String? token = await messaging.getToken();
+
+      if (token != null) {
+        log('🎫 FCM Token: $token');
+
+        // Update user document with token
+        await firestore.collection('users').doc(user.uid).update({
+          'pushToken': token,
+          'lastActive': DateTime.now().millisecondsSinceEpoch.toString(),
+          'tokenUpdatedAt': FieldValue.serverTimestamp(),
+        });
+
+        log('✅ FCM token updated in Firestore');
+      } else {
+        log('❌ Failed to get FCM token');
+      }
+
+      // Listen for token refresh
+      messaging.onTokenRefresh.listen((newToken) {
+        log('🔄 FCM token refreshed: $newToken');
+        firestore.collection('users').doc(user.uid).update({
+          'pushToken': newToken,
+          'tokenUpdatedAt': FieldValue.serverTimestamp(),
+        });
+      });
+
+    } catch (e) {
+      log('❌ Error updating FCM token: $e');
+    }
+  }
+
+  // Setup comprehensive message handlers
+  static void setupMessageHandlers() {
+    FirebaseMessaging messaging = FirebaseMessaging.instance;
+
+    // Foreground messages
+    FirebaseMessaging.onMessage.listen((RemoteMessage message) {
+      log('📱 Received foreground message: ${message.notification?.title}');
+
+      // You can add custom logic here to show in-app notifications
+      // or update UI state based on the message
+    });
+
+    // Background/terminated app message taps
+    FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
+      log('📱 App opened from notification: ${message.data}');
+
+      // Navigate to specific screen based on message data
+      // You can add navigation logic here
+    });
+
+    // Check for initial message (app opened from terminated state)
+    messaging.getInitialMessage().then((RemoteMessage? message) {
+      if (message != null) {
+        log('📱 App launched from notification: ${message.data}');
+        // Handle initial message navigation
+      }
+    });
+  }
+
+  // Send notification to specific user (call this when sending a message)
+  static Future<void> sendNotificationToUser({required String recipientToken, required String title, required String body, required Map<String, String> data,}) async {
+    try {
+      if (recipientToken.isEmpty) {
+        log('⚠️ Recipient token is empty, skipping notification');
+        return;
+      }
+
+      // You'll need to implement server-side notification sending
+      // This is typically done through your backend server for security
+      log('📤 Sending notification to token: ${recipientToken.substring(0, 20)}...');
+
+      // For now, just log the notification data
+      log('📋 Notification data:');
+      log('  Title: $title');
+      log('  Body: $body');
+      log('  Data: $data');
+
+    } catch (e) {
+      log('❌ Error sending notification: $e');
+    }
+  }
+
+  static void setupForegroundMessageListener() {
+    FirebaseMessaging.onMessage.listen((RemoteMessage message) {
+      print('Got a message whilst in the foreground!');
+      print('Message data: ${message.data}');
+
+      if (message.notification != null) {
+        print('Message also contained a notification: ${message.notification}');
+        // You can show an in-app notification here
+      }
+    });
   }
 
   // Get only my added connections
@@ -800,33 +974,68 @@ class APIS{
 
   // Get display text (translate if needed)
   static Future<String> getDisplayText(Message message) async {
-    // If it's your own message, show original
+    // RULE: Always show messages as they were originally displayed/translated
+
+    // Your own messages: always show in the language you wrote them
     if (message.fromID == user.uid) {
       return message.originalMsg;
     }
 
-    final viewerLang = await getUserPreferredLanguage(APIS.user.uid);
-
-    // if already translated, use it
-    if (message.recipientLanguage == viewerLang &&
-        message.wasTranslated &&
-        message.translationSucceeded){
-      return message.msg;
+    // Received messages: show them as they were translated when sent
+    // If the message was successfully translated for you, use that translation
+    // Otherwise, use the original message
+    if (message.wasTranslated && message.translationSucceeded) {
+      return message.msg; // Use the translation that was made when message was sent
+    } else {
+      return message.originalMsg; // Use original if no translation or translation failed
     }
 
-    // If viewer's language is same as sender's language, show original
-    if (message.senderLanguage == viewerLang) {
-      return message.originalMsg;
+    // This ensures:
+    // 1. Your messages always appear in the language you wrote them
+    // 2. Received messages appear in the language they were translated to when sent
+    // 3. No re-translation happens when you change language preferences
+    // 4. Past conversations maintain their original appearance
+  }
+
+// ALSO ADD: Method to handle language changes for FUTURE messages only
+  static Future<void> onLanguageChanged(String newLanguage) async {
+    try {
+      await updateMyPreferredLanguage(newLanguage);
+      log('✅ Language changed to: $newLanguage');
+      log('📝 Note: This will only affect NEW messages. Past messages remain unchanged.');
+    } catch (e) {
+      log('❌ Error changing language: $e');
     }
+    // RULE: Always show messages as they were originally displayed/translated
 
-    // Re-translate if viewer's language is different
-    final retranslated = await translateTextWithFallback(
-      text: message.originalMsg,
-      sourceLang: message.senderLanguage,
-      targetLang: viewerLang,
-    );
 
-    return retranslated['text'];
+    // // If it's your own message, show original
+    // if (message.fromID == user.uid) {
+    //   return message.originalMsg;
+    // }
+    //
+    // final viewerLang = await getUserPreferredLanguage(APIS.user.uid);
+    //
+    // // if already translated, use it
+    // if (message.recipientLanguage == viewerLang &&
+    //     message.wasTranslated &&
+    //     message.translationSucceeded){
+    //   return message.msg;
+    // }
+    //
+    // // If viewer's language is same as sender's language, show original
+    // if (message.senderLanguage == viewerLang) {
+    //   return message.originalMsg;
+    // }
+
+    // // Re-translate if viewer's language is different
+    // final retranslated = await translateTextWithFallback(
+    //   text: message.originalMsg,
+    //   sourceLang: message.senderLanguage,
+    //   targetLang: viewerLang,
+    // );
+    //
+    // return retranslated['text'];
   }
 
   // NEW: Edit an existing message

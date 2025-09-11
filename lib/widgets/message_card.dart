@@ -1,258 +1,8 @@
-// import 'package:cached_network_image/cached_network_image.dart';
-// import 'package:connect/APIs/apis.dart';
-// import 'package:connect/helper/my_date_util.dart';
-// import 'package:connect/screens/fullscreen_image_viewer.dart';
-// import 'package:flutter/material.dart';
-// // import 'package:intl/intl.dart';
-// import '../main.dart';
-// import '../models/messages.dart';
-//
-// //for showing single message details
-// class MessageCard extends StatefulWidget {
-//   const MessageCard({super.key, required this.message, this.onReply, this.onEdit});
-//   final Message message;
-//   final Function(Message)? onReply;
-//   final Function(Message)? onEdit;
-//
-//   @override
-//   State<MessageCard> createState() => _MessageCardState();
-// }
-//
-// class _MessageCardState extends State<MessageCard> {
-//   String? displayText;
-//   bool isLoading = true;
-//
-//   @override
-//   void initState() {
-//     super.initState();
-//     if (widget.message.type == MessageType.text) {
-//       _loadDisplayText();
-//     } else {
-//       // For image messages, no need to load text
-//       setState(() {
-//         isLoading = false;
-//       });
-//     }
-//   }
-//
-//   Future<void> _loadDisplayText() async {
-//     final text = await APIS.getDisplayText(widget.message);
-//     if (mounted) {
-//       setState(() {
-//         displayText = text;
-//         isLoading = false;
-//       });
-//     }
-//   }
-//
-//
-//   @override
-//   Widget build(BuildContext context) {
-//     return APIS.user.uid == widget.message.fromID
-//         ? _blueMessage()
-//         : _greyMessage();
-//   }
-//
-//   // Build message content based on type
-//   Widget _buildMessageContent() {
-//     if (widget.message.type == MessageType.image) {
-//       return _buildImageContent();
-//     } else {
-//       return _buildTextContent();
-//     }
-//   }
-//
-//   Widget _buildImageContent(){
-//     if(widget.message.imageUrl == null || widget.message.imageUrl!.isEmpty){
-//       return Container(
-//         padding: EdgeInsets.all(16),
-//         child: Column(
-//           children: [
-//             Icon(Icons.broken_image, size: 50, color: Colors.grey),
-//             Text('Image not available', style: TextStyle(color: Colors.grey)),
-//           ],
-//         ),
-//       );
-//     }
-//
-//     return GestureDetector(
-//       onTap: (){
-//         Navigator.push(context,
-//             MaterialPageRoute(builder: (context) => FullScreenImageViewer(
-//             imageUrl: widget.message.imageUrl!,
-//             senderName: APIS.user.uid == widget.message.fromID ? "You" : null,
-//             timestamp: MyDateUtil.getFormattedTime(context: context, time: widget.message.sent)
-//             ),
-//             ),
-//         );
-//       },
-//       child: ClipRRect(
-//         borderRadius: BorderRadius.circular(12),
-//         child: CachedNetworkImage(
-//           imageUrl: widget.message.imageUrl!,
-//           width: mq.width * 0.6,
-//           fit: BoxFit.cover,
-//           placeholder: (context, url) => Container(
-//             width: mq.width * 0.6,
-//             height: 200,
-//             decoration: BoxDecoration(
-//               color: Colors.grey[300],
-//               borderRadius: BorderRadius.circular(12),
-//             ),
-//             child: Center(
-//               child: CircularProgressIndicator(),
-//             ),
-//           ),
-//           errorWidget: (context, url, error) => Container(
-//             width: mq.width * 0.6,
-//             height: 200,
-//             decoration: BoxDecoration(
-//               color: Colors.grey[300],
-//               borderRadius: BorderRadius.circular(12),
-//             ),
-//             child: Column(
-//               mainAxisAlignment: MainAxisAlignment.center,
-//               children: [
-//                 Icon(Icons.error, color: Colors.red, size: 40),
-//                 Text('Failed to load image', style: TextStyle(color: Colors.red)),
-//               ],
-//             ),
-//           ),
-//         ),
-//       ),
-//     );
-//   }
-//
-//   Widget _buildTextContent() {
-//     return Text(
-//       displayText ?? "...",
-//       style: TextStyle(
-//         fontSize: 14,
-//         color: APIS.user.uid == widget.message.fromID ? Colors.white : null,
-//       ),
-//     );
-//   }
-//
-//   //sender or another user message
-// Widget _greyMessage() {
-//     return Row(
-//       mainAxisAlignment: MainAxisAlignment.spaceBetween,
-//       children: [
-//         // message content
-//         Flexible(
-//           child: Container(
-//             padding: EdgeInsets.symmetric(
-//                 vertical: mq.width * 0.02,
-//                 horizontal: widget.message.type == MessageType.image
-//                     ? mq.width * 0.01
-//                     : mq.width * 0.03),
-//             margin: EdgeInsets.symmetric(
-//               horizontal: mq.width * 0.04, vertical: mq.height * 0.01),
-//               decoration: BoxDecoration(
-//                   color: Theme.of(context).brightness == Brightness.dark
-//                       ? Color(0xFF2C2C2E)  // iMessage dark mode incoming
-//                       : Color(0xFFE5E5EA), // iMessage light mode incoming (the signature grey)
-//                   border: Border.all(color: Theme.of(context).brightness == Brightness.dark
-//                       ? Color(0xFF2C2C2E)
-//                       : Color(0xFFE5E5EA)),
-//                   borderRadius: BorderRadius.only(
-//                     topLeft: Radius.circular(18),    // iMessage uses 18px radius
-//                     topRight: Radius.circular(18),
-//                     bottomRight: Radius.circular(18),
-//                   )
-//               ),
-//
-//               // actual content
-//               child: _buildMessageContent(),
-//           ),
-//         ),
-//
-//         //message time
-//         Padding(
-//           padding: EdgeInsets.only(right: mq.width * 0.04),
-//           child: Text(
-//             MyDateUtil.getFormattedTime(
-//                 context: context, time: widget.message.sent),
-//             style: TextStyle(
-//               fontSize: 10
-//             ),
-//           ),
-//         ),
-//       ],
-//     );
-// }
-//
-//   //our or user message
-// Widget _blueMessage(){
-//     return Row(
-//       mainAxisAlignment: MainAxisAlignment.spaceBetween,
-//       children: [
-//         Row(
-//             children: [
-//               //some space
-//               SizedBox(width: mq.width * 0.04),
-//
-//               //double tick icon for message sent
-//               if (widget.message.read.isNotEmpty)
-//               Icon(Icons.done_all_rounded,
-//                 color: Colors.blue,
-//               size: 15),
-//               //some space
-//               SizedBox(width: 2),
-//
-//               //sent time
-//               Text(
-//                MyDateUtil.getFormattedTime(
-//                    context: context, time: widget.message.sent),
-//                 style: TextStyle(
-//                     fontSize: 10
-//                 ),
-//               )
-//             ]
-//         ),
-//               // message content
-//               Flexible(
-//                 child: Container(
-//                   padding: EdgeInsets.symmetric(
-//                       vertical: mq.width * 0.02,
-//                       horizontal: widget.message.type == MessageType.image
-//                           ? mq.width * 0.01
-//                           : mq.width * 0.03),
-//                   margin: EdgeInsets.symmetric(
-//                       horizontal: mq.width * 0.04, vertical: mq.height * 0.01),
-//                   decoration: BoxDecoration(
-//                       color: Theme.of(context).brightness == Brightness.dark
-//                           ? Color(0xFF0A84FF)  // iMessage dark mode blue
-//                           : Color(0xFF007AFF), // iMessage light mode blue
-//                       border: Border.all(color: Theme.of(context).brightness == Brightness.dark
-//                           ? Color(0xFF0A84FF)
-//                           : Color(0xFF007AFF)),
-//                       borderRadius: BorderRadius.only(
-//                         topLeft: Radius.circular(18),
-//                         topRight: Radius.circular(18),
-//                         bottomLeft: Radius.circular(18),
-//                         bottomRight: Radius.circular(1),
-//                       )
-//                   ),
-//
-//                   // actual content
-//                   child: _buildMessageContent(),
-//                 ),
-//               ),
-//
-//
-//       ],
-//     );
-// }
-// }
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'dart:developer';
 import 'package:cached_network_image/cached_network_image.dart';
-
 import '../APIs/apis.dart';
-import '../models/chat_user.dart';
 import '../models/messages.dart';
 import '../main.dart';
 import '../helper/my_date_util.dart';
@@ -287,11 +37,25 @@ class _MessageCardState extends State<MessageCard> {
   Future<void> _loadDisplayText() async {
     if (widget.message.type == MessageType.text && !widget.message.isDeleted) {
       setState(() => _isLoadingText = true);
+
       try {
-        final text = await APIS.getDisplayText(widget.message);
+        // Use the simple, consistent display logic
+        String displayText;
+
+        // Your own messages: always show original
+        if (APIS.user.uid == widget.message.fromID) {
+          displayText = widget.message.originalMsg;
+        }
+        // Received messages: show as they were translated when sent
+        else if (widget.message.wasTranslated && widget.message.translationSucceeded) {
+          displayText = widget.message.msg; // Use stored translation
+        } else {
+          displayText = widget.message.originalMsg; // Use original
+        }
+
         if (mounted) {
           setState(() {
-            _displayText = text;
+            _displayText = displayText;
             _isLoadingText = false;
           });
         }
@@ -466,8 +230,45 @@ class _MessageCardState extends State<MessageCard> {
               color: isMe ? Colors.white : null,
             ),
           ),
+
+        // Optional: Show translation indicator for received translated messages
+        if (!isMe &&
+            widget.message.wasTranslated &&
+            widget.message.translationSucceeded)
+          Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: Text(
+              'Translated from ${_getLanguageName(widget.message.senderLanguage)}',
+              style: TextStyle(
+                fontSize: 10,
+                color: Colors.grey[600],
+                fontStyle: FontStyle.italic,
+              ),
+            ),
+          ),
       ],
     );
+  }
+
+  // Helper method to get language display name
+  String _getLanguageName(String langCode) {
+    const Map<String, String> languageNames = {
+      'en': 'English',
+      'es': 'Spanish',
+      'fr': 'French',
+      'de': 'German',
+      'it': 'Italian',
+      'pt': 'Portuguese',
+      'ru': 'Russian',
+      'ja': 'Japanese',
+      'ko': 'Korean',
+      'zh': 'Chinese',
+      'ar': 'Arabic',
+      'hi': 'Hindi',
+      'th': 'Thai',
+      'vi': 'Vietnamese',
+    };
+    return languageNames[langCode] ?? langCode.toUpperCase();
   }
 
   Widget _buildImageMessage() {

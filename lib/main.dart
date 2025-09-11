@@ -1,6 +1,6 @@
-// import 'package:connect/screens/auth/login_screen.dart';
 import 'dart:developer';
-
+import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:connect/screens/auth/login_screen.dart';
 import 'package:connect/screens/homescreen.dart';
 import 'package:connect/screens/language_select_screen.dart';
@@ -17,44 +17,121 @@ import 'firebase_options.dart';
 //global object for accessing device screen size
 late Size mq;
 
+// Flutter Local Notifications Plugin
+final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
+FlutterLocalNotificationsPlugin();
+
+// Handle background messages
+@pragma('vm:entry-point')
+Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  print("📱 Background message: ${message.notification?.title}");
+
+  // Show local notification for background messages
+  await _showNotification(message);
+}
+
+// Show local notification
+Future<void> _showNotification(RemoteMessage message) async {
+  const AndroidNotificationDetails androidPlatformChannelSpecifics =
+  AndroidNotificationDetails(
+    'chat_channel', // channel id
+    'Chat Messages', // channel name
+    channelDescription: 'Notifications for chat messages',
+    importance: Importance.high,
+    priority: Priority.high,
+    showWhen: true,
+  );
+
+  const NotificationDetails platformChannelSpecifics =
+  NotificationDetails(android: androidPlatformChannelSpecifics);
+
+  await flutterLocalNotificationsPlugin.show(
+    DateTime.now().millisecond, // notification id
+    message.notification?.title ?? 'New Message',
+    message.notification?.body ?? 'You have a new message',
+    platformChannelSpecifics,
+  );
+}
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  //enter fullscreen
-  // SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
-// portrait only
+
   await SystemChrome.setPreferredOrientations([
     DeviceOrientation.portraitUp,
     DeviceOrientation.portraitDown
   ]);
 
-       await _initializeFirebase();
-       await initializeApp();
+  await _initializeFirebase();
+  await _initializeNotifications();
+  await initializeApp();
 
-        runApp(
-            ChangeNotifierProvider(
-                create:(_)=> ThemeProvider(),
-                child: const MyApp(),
-            ));
+  runApp(
+    ChangeNotifierProvider(
+      create: (_) => ThemeProvider(),
+      child: const MyApp(),
+    ),
+  );
+}
+
+Future<void> _initializeNotifications() async {
+  // Initialize local notifications
+  const AndroidInitializationSettings initializationSettingsAndroid =
+  AndroidInitializationSettings('@mipmap/ic_launcher');
+
+  const InitializationSettings initializationSettings =
+  InitializationSettings(android: initializationSettingsAndroid);
+
+  await flutterLocalNotificationsPlugin.initialize(
+    initializationSettings,
+    onDidReceiveNotificationResponse: (details) {
+      print("📱 Notification tapped: ${details.payload}");
+      // Handle notification tap - navigate to chat screen
+    },
+  );
+
+  // Create notification channel for Android
+  const AndroidNotificationChannel channel = AndroidNotificationChannel(
+    'chat_channel',
+    'Chat Messages',
+    description: 'Notifications for chat messages',
+    importance: Importance.high,
+  );
+
+  await flutterLocalNotificationsPlugin
+      .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
+      ?.createNotificationChannel(channel);
 }
 
 Future<void> initializeApp() async {
   try {
     log('🚀 Starting app initialization...');
-    // 🔥 NEW: Add timeout to prevent splash screen hanging
     await APIS.getSelfInfo().timeout(
       const Duration(seconds: 15),
       onTimeout: () {
         log('⏰ App initialization timed out, continuing anyway...');
       },
     );
+
+    // Initialize FCM properly
+    await APIS.initializeFCM();
+
     log('✅ App initialization completed');
   } catch (e) {
     log('❌ App initialization error: $e');
-    // Don't block the app - continue to home screen
   }
 }
 
+Future<void> _initializeFirebase() async {
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
 
+  // Set background message handler
+  FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
+}
+
+// Your existing MyApp class remains the same...
 class MyApp extends StatefulWidget {
   const MyApp({super.key});
 
@@ -66,14 +143,28 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   @override
   void initState() {
     super.initState();
-    // Add this widget as a lifecycle observer
     WidgetsBinding.instance.addObserver(this);
+    _setupForegroundMessageHandling();
   }
+
+  void _setupForegroundMessageHandling() {
+    // Handle foreground messages
+    FirebaseMessaging.onMessage.listen((RemoteMessage message) {
+      print('📱 Foreground message: ${message.notification?.title}');
+      _showNotification(message);
+    });
+
+    // Handle notification taps when app is in background
+    FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
+      print('📱 Message clicked: ${message.data}');
+      // Navigate to specific chat screen based on message data
+    });
+  }
+
   @override
   void dispose() {
-    // Remove the observer and clean up presence tracking
     WidgetsBinding.instance.removeObserver(this);
-    APIS.dispose(); // Clean up presence tracking when app is disposed
+    APIS.dispose();
     super.dispose();
   }
 
@@ -81,20 +172,16 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   void didChangeAppLifecycleState(AppLifecycleState state) {
     super.didChangeAppLifecycleState(state);
 
-    // Handle app lifecycle changes for presence tracking
     switch (state) {
       case AppLifecycleState.resumed:
-      // App came to foreground
         APIS.handleAppLifecycleChange(true);
         break;
       case AppLifecycleState.paused:
       case AppLifecycleState.inactive:
       case AppLifecycleState.detached:
-      // App went to background/inactive
         APIS.handleAppLifecycleChange(false);
         break;
       case AppLifecycleState.hidden:
-      // App is hidden (newer Flutter versions)
         APIS.handleAppLifecycleChange(false);
         break;
     }
@@ -107,7 +194,6 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'Connect',
-      // themeMode: ThemeMode.light,
       themeMode: themeProvider.themeMode,
       theme: ThemeData.light().copyWith(
         appBarTheme: const AppBarTheme(
@@ -145,67 +231,50 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
           backgroundColor: Colors.black,
         ),
       ),
-
       home: StreamBuilder<User?>(
-          stream: FirebaseAuth.instance.authStateChanges(),
-          builder: (context, snapshot){
-    // Show splash screen while loading
-    if (snapshot.connectionState == ConnectionState.waiting) {
-    return const SplashScreen();
-    }
-    // If there's an error, show splash screen (which will handle the error)
-    if (snapshot.hasError) {
-    log('❌ Auth stream error: ${snapshot.error}');
-    return const SplashScreen();
-      }
-    // Check if user is authenticated
-    if (snapshot.hasData && snapshot.data != null) {
-    log('✅ User is authenticated: ${snapshot.data!.uid}');
-    return
-      // lang screen
-      FutureBuilder<String>(
-      future: APIS.getUserPreferredLanguage(snapshot.data!.uid),
-      builder: (context, langSnapshot) {
-        if (langSnapshot.connectionState == ConnectionState.waiting) {
-          return const Scaffold(
-            body: Center(child: CircularProgressIndicator()),
-          );
-        }
+        stream: FirebaseAuth.instance.authStateChanges(),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const SplashScreen();
+          }
+          if (snapshot.hasError) {
+            log('❌ Auth stream error: ${snapshot.error}');
+            return const SplashScreen();
+          }
+          if (snapshot.hasData && snapshot.data != null) {
+            log('✅ User is authenticated: ${snapshot.data!.uid}');
+            return FutureBuilder<String>(
+              future: APIS.getUserPreferredLanguage(snapshot.data!.uid),
+              builder: (context, langSnapshot) {
+                if (langSnapshot.connectionState == ConnectionState.waiting) {
+                  return const Scaffold(
+                    body: Center(child: CircularProgressIndicator()),
+                  );
+                }
 
-        if (langSnapshot.hasError) {
-          log('❌ Language fetch error: ${langSnapshot.error}');
-          return const SplashScreen(); // Or fallback UI
-        }
-        log('🧠 FutureBuilder triggered');
-        final preferredLang = langSnapshot.data ?? '';
-        log('🧠 preferredLang: "$preferredLang"');
-        final showSelector = preferredLang.isEmpty;
-        log('🧠 showSelector: $showSelector');
+                if (langSnapshot.hasError) {
+                  log('❌ Language fetch error: ${langSnapshot.error}');
+                  return const SplashScreen();
+                }
 
-        log('🧠 preferredLang: $preferredLang');
-        log('🧠 showSelector: $showSelector');
+                final preferredLang = langSnapshot.data ?? '';
+                final showSelector = preferredLang.isEmpty;
 
-        if (showSelector) {
-          log('🌐 Showing Language Selector Screen');
-          return LanguageSelectScreen();
-        } else {
-          log('🏠 Routing to HomeScreen');
-          return const HomeScreen();
-        }
-      },
-    );
-    } else {
-    log('ℹ️ User is not authenticated');
-    return const LoginScreen();
-       }
-      }
+                if (showSelector) {
+                  log('🌐 Showing Language Selector Screen');
+                  return LanguageSelectScreen();
+                } else {
+                  log('🏠 Routing to HomeScreen');
+                  return const HomeScreen();
+                }
+              },
+            );
+          } else {
+            log('ℹ️ User is not authenticated');
+            return const LoginScreen();
+          }
+        },
       ),
     );
   }
-}
-
-Future<void> _initializeFirebase() async{
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
 }

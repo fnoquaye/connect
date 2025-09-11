@@ -23,6 +23,23 @@ class _ChatUserCardState extends State<ChatUserCard> {
 
   // last message info (if null --> no message)
   Message? _message;
+  ChatUser? _fullUser;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadFullUser();
+  }
+
+  Future<void> _loadFullUser() async {
+    final user = await APIS.getUserById(widget.user.id);
+    if (mounted) {
+      setState(() {
+        _fullUser = user;
+      });
+    }
+  }
+
 
   @override
   Widget build(BuildContext context) {
@@ -57,16 +74,21 @@ class _ChatUserCardState extends State<ChatUserCard> {
                       Expanded(
                         child: ListTile(
                           contentPadding: EdgeInsets.symmetric(horizontal: 16),
-                          leading: ClipRRect(
+                          leading: (_fullUser?.image != null && _fullUser!.image.isNotEmpty)
+                              ? ClipRRect(
                             borderRadius: BorderRadius.circular(mq.height * 0.03),
                             child: CachedNetworkImage(
                               width: mq.height * 0.055,
                               height: mq.height * 0.055,
-                              imageUrl: widget.user.image,
+                              imageUrl: _fullUser!.image,
                               placeholder: (context, url) => const CircularProgressIndicator(),
                               errorWidget: (context, url, error) =>
                               const CircleAvatar(child: Icon(CupertinoIcons.person)),
                             ),
+                          )
+                              : CircleAvatar(
+                            radius: mq.height * 0.0275,
+                            child: const Icon(CupertinoIcons.person),
                           ),
                           title: Text(widget.user.name),
                           subtitle: _message != null
