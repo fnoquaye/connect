@@ -115,6 +115,7 @@ Future<void> initializeApp() async {
 
     // Initialize FCM properly
     await APIS.initializeFCM();
+    await APIS.getSelfInfo();
 
     log('✅ App initialization completed');
   } catch (e) {

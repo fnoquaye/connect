@@ -34,16 +34,51 @@ class _ChatScreenState extends State<ChatScreen> {
   Stream<DocumentSnapshot<Map<String, dynamic>>>? _userProfileStream; // NEW: Real-time user profile
 
   // String _selectedTargetLanguage = 'fr'; // Default to French
-  final String targetLang = APIS.me.preferredLanguage ?? 'en';
+  // final String targetLang = APIS.me.preferredLanguage ?? 'en';
+  String? _targetLang;
 
   @override
   void initState() {
     super.initState();
+    _initializeScreen();
     // _loadFullUser();
     // Initialize streams once
-    _messagesStream = APIS.getAllMessages(widget.user);
-    _userStatusStream = APIS.getUserStatus(widget.user.id);
-    _userProfileStream = APIS.getUserProfileStream(widget.user.id); // NEW: Real-time profile stream
+    // _messagesStream = APIS.getAllMessages(widget.user);
+    // _userStatusStream = APIS.getUserStatus(widget.user.id);
+    // _userProfileStream = APIS.getUserProfileStream(widget.user.id); // NEW: Real-time profile stream
+  }
+  Future<void> _initializeScreen() async {
+    try {
+      // Wait for APIS to be initialized if it's not already
+      if (!APIS.isInitialized) {
+        await APIS.getSelfInfo();
+      }
+
+      if (APIS.me == null) {
+        throw Exception('User info not initialized');
+      }
+      // Now safely get the target language
+      _targetLang = APIS.me.preferredLanguage ?? 'en';
+
+      // Initialize streams once APIS is ready
+      _messagesStream = APIS.getAllMessages(widget.user);
+      _userStatusStream = APIS.getUserStatus(widget.user.id);
+      _userProfileStream = APIS.getUserProfileStream(widget.user.id);
+
+      // Refresh the UI
+      if (mounted) {
+        setState(() {});
+      }
+    } catch (e) {
+      log('Error initializing ChatScreen: $e');
+      // Handle gracefully - maybe show error or go back
+      if (mounted) {
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error loading chat: $e')),
+        );
+      }
+    }
   }
 
   final ValueNotifier<bool> _isEmojiPickerVisible = ValueNotifier(false);
@@ -66,6 +101,19 @@ class _ChatScreenState extends State<ChatScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Show loading while initializing
+    if (_messagesStream == null || _userStatusStream == null || _userProfileStream == null) {
+      return Scaffold(
+        appBar: AppBar(
+          title: Text(widget.user.name),
+        ),
+        body: const Center(
+          child: CircularProgressIndicator(),
+        ),
+      );
+    }
+
+
     return PopScope(
       canPop: false, // Prevent default back behavior
       onPopInvokedWithResult: (didPop, result) {
@@ -136,7 +184,7 @@ class _ChatScreenState extends State<ChatScreen> {
                                 itemBuilder: (context, index){
                                   final reversedIndex = _list.length - 1 - index;
                                   return MessageCard(
-                                      key:  ValueKey(_list[reversedIndex].sent), // Add key for better performance,
+                                      key:  ValueKey(_list[reversedIndex].sent),
                                       message: _list[reversedIndex],
                                       onReply: (msg){
                                         ChatInputController.setReplyMessage(msg);

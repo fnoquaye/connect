@@ -32,6 +32,19 @@ class APIS{
   static String? _currentDeviceId;
   static bool _isInitialized = false;
 
+  // ADD THIS GETTER
+  static bool get isInitialized => _isInitialized;
+
+  // ADD THIS METHOD to check if me is initialized
+  static bool get isMeInitialized {
+    try {
+      return _isInitialized && me != null;
+    } catch (e) {
+      return false;
+    }
+  }
+
+
   // Track if presence tracking is active
   static bool _isPresenceTrackingActive = false;
 
@@ -976,19 +989,44 @@ class APIS{
   static Future<String> getDisplayText(Message message) async {
     // RULE: Always show messages as they were originally displayed/translated
 
-    // Your own messages: always show in the language you wrote them
     if (message.fromID == user.uid) {
       return message.originalMsg;
     }
 
-    // Received messages: show them as they were translated when sent
-    // If the message was successfully translated for you, use that translation
-    // Otherwise, use the original message
-    if (message.wasTranslated && message.translationSucceeded) {
-      return message.msg; // Use the translation that was made when message was sent
-    } else {
-      return message.originalMsg; // Use original if no translation or translation failed
+    // For received messages, check if we need to translate to current language
+    final currentUserLang = await getUserPreferredLanguage(user.uid);
+
+    // If message was already translated to our current language, use it
+    if (message.wasTranslated &&
+        message.translationSucceeded &&
+        message.recipientLanguage == currentUserLang) {
+      return message.msg;
     }
+
+    // If sender's language matches our current language, show original
+    if (message.senderLanguage == currentUserLang) {
+      return message.originalMsg;
+    }
+
+    // If we need translation to current language, translate now
+    if (message.senderLanguage != currentUserLang && currentUserLang.isNotEmpty) {
+      try {
+        final translationResult = await translateTextWithFallback(
+          text: message.originalMsg,
+          sourceLang: message.senderLanguage,
+          targetLang: currentUserLang,
+        );
+
+        if (translationResult['success']) {
+          return translationResult['text'];
+        }
+      } catch (e) {
+        log('Error translating message for display: $e');
+      }
+    }
+
+    // Fallback: show original message
+    return message.originalMsg;
 
     // This ensures:
     // 1. Your messages always appear in the language you wrote them

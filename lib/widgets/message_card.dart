@@ -39,19 +39,8 @@ class _MessageCardState extends State<MessageCard> {
       setState(() => _isLoadingText = true);
 
       try {
-        // Use the simple, consistent display logic
-        String displayText;
-
-        // Your own messages: always show original
-        if (APIS.user.uid == widget.message.fromID) {
-          displayText = widget.message.originalMsg;
-        }
-        // Received messages: show as they were translated when sent
-        else if (widget.message.wasTranslated && widget.message.translationSucceeded) {
-          displayText = widget.message.msg; // Use stored translation
-        } else {
-          displayText = widget.message.originalMsg; // Use original
-        }
+        // Use the updated getDisplayText method
+        final displayText = await APIS.getDisplayText(widget.message);
 
         if (mounted) {
           setState(() {
